@@ -510,4 +510,22 @@ export async function exportErrorLog(suggestedFileName: string): Promise<string 
   return target;
 }
 
+export async function exportDiagnosticBundle(suggestedFileName: string): Promise<string | null> {
+  if (!isTauri) {
+    return `~/Downloads/${suggestedFileName}`;
+  }
+  const { save } = await import('@tauri-apps/plugin-dialog');
+  const target = await save({
+    defaultPath: suggestedFileName,
+    filters: [{ name: 'Diagnostic bundle', extensions: ['zip'] }],
+  });
+  if (!target) return null;
+  await invokeOrMock<string>(
+    'export_diagnostic_bundle',
+    { targetPath: target, recentLimit: 200 },
+    () => target,
+  );
+  return target;
+}
+
 export { isTauri };

@@ -19,6 +19,7 @@ import {
   clearHistory,
   clearProviderConfiguration,
   clearVocab,
+  exportDiagnosticBundle,
   getHotkeyStatus,
   getWindowsImeStatus,
   isTauri,
@@ -613,6 +614,9 @@ function PrivacySection() {
     emitSaved('saving', t('common.saving'));
     try {
       const result = await task();
+      if (result === null) {
+        return;
+      }
       emitSaved('saved', typeof result === 'string' && result ? result : successMessage);
     } catch (error) {
       console.error(`[settings] ${action} failed`, error);
@@ -655,6 +659,15 @@ function PrivacySection() {
         await refresh();
       },
       t('settings.privacy.actionDone'),
+    );
+  };
+
+  const onExportDiagnostics = () => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    void runAction(
+      'exportDiagnostics',
+      () => exportDiagnosticBundle(`whisper-input-diagnostics-${stamp}.zip`),
+      t('settings.privacy.diagnosticExportDone'),
     );
   };
 
@@ -705,6 +718,14 @@ function PrivacySection() {
       >
         <Btn size="sm" variant="ghost" onClick={onClearConfiguration} disabled={isBusy('clearProviderConfiguration')}>
           {isBusy('clearProviderConfiguration') ? t('common.saving') : t('settings.privacy.clearConfigBtn')}
+        </Btn>
+      </SettingRow>
+      <SettingRow
+        label={t('settings.privacy.exportDiagnosticsLabel')}
+        desc={t('settings.privacy.exportDiagnosticsDesc')}
+      >
+        <Btn size="sm" variant="ghost" onClick={onExportDiagnostics} disabled={isBusy('exportDiagnostics')}>
+          {isBusy('exportDiagnostics') ? t('common.saving') : t('settings.privacy.exportDiagnosticsBtn')}
         </Btn>
       </SettingRow>
     </Card>

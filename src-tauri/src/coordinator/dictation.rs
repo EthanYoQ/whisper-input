@@ -95,7 +95,7 @@ fn new_dictation_trace(
             mode: Some(format!("{mode:?}")),
             hotkey_mode: Some(format!("{hotkey_mode:?}")),
             front_app,
-            pressed_at: Some(now),
+            pressed_at: None,
             released_at: None,
             cancelled: false,
         },
@@ -148,6 +148,79 @@ fn append_diagnostic_trace(inner: &Arc<Inner>, trace: DiagnosticTrace) {
     if let Err(error) = inner.diagnostics.append(trace) {
         log::warn!("[diagnostics] append dictation trace failed: {error}");
     }
+}
+
+fn append_asr_error_trace(inner: &Arc<Inner>, mut trace: DiagnosticTrace, error: String) {
+    trace.asr.error = Some(error);
+    trace.insertion.status = Some("notStarted".to_string());
+    trace.insertion.method = Some("none".to_string());
+    append_diagnostic_trace(inner, trace);
+}
+
+fn append_begin_asr_error_trace(
+    inner: &Arc<Inner>,
+    current_session_id: SessionId,
+    asr_provider_id: &str,
+    error: impl Into<String>,
+) {
+    let mut trace = new_begin_error_trace(inner, current_session_id, asr_provider_id);
+    trace.asr.error = Some(error.into());
+    trace.insertion.status = Some("notStarted".to_string());
+    trace.insertion.method = Some("none".to_string());
+    append_diagnostic_trace(inner, trace);
+}
+
+fn append_begin_recorder_error_trace(
+    inner: &Arc<Inner>,
+    current_session_id: SessionId,
+    asr_provider_id: &str,
+    error: impl Into<String>,
+) {
+    let mut trace = new_begin_error_trace(inner, current_session_id, asr_provider_id);
+    trace.recorder.error = Some(error.into());
+    trace.insertion.status = Some("notStarted".to_string());
+    trace.insertion.method = Some("none".to_string());
+    append_diagnostic_trace(inner, trace);
+}
+
+fn append_runtime_recorder_error_trace(
+    inner: &Arc<Inner>,
+    current_session_id: SessionId,
+    error: impl Into<String>,
+) {
+    let active_asr = CredentialsVault::get_active_asr();
+    let mut trace = new_begin_error_trace(inner, current_session_id, &active_asr);
+    trace.session.released_at = Some(Utc::now().to_rfc3339());
+    trace.recorder.error = Some(error.into());
+    trace.insertion.status = Some("recorderError".to_string());
+    trace.insertion.method = Some("none".to_string());
+    append_diagnostic_trace(inner, trace);
+}
+
+fn new_begin_error_trace(
+    inner: &Arc<Inner>,
+    current_session_id: SessionId,
+    asr_provider_id: &str,
+) -> DiagnosticTrace {
+    let prefs = inner.prefs.get();
+    let (front_app, cancelled) = {
+        let state = inner.state.lock();
+        (state.front_app.clone(), state.cancelled)
+    };
+    let mut trace = new_dictation_trace(
+        Uuid::new_v4().to_string(),
+        prefs.default_mode,
+        prefs.hotkey.mode,
+        front_app,
+        asr_provider_id.to_string(),
+        CredentialsVault::get_active_llm(),
+    );
+    trace.trace_id = current_session_id.to_string();
+    trace.session.cancelled = cancelled;
+    if let Some(probe) = take_recorder_diagnostics_for_session(inner, current_session_id) {
+        trace.recorder = probe.snapshot();
+    }
+    trace
 }
 
 #[cfg(test)]
@@ -663,8 +736,11 @@ pub(super) async fn begin_session(inner: &Arc<Inner>) -> Result<(), String> {
         return Ok(());
     }
 
+    let active_asr = CredentialsVault::get_active_asr();
+
     if let Err(message) = ensure_asr_credentials() {
         log::warn!("[coord] ASR credential gate failed: {message}");
+        append_begin_asr_error_trace(inner, current_session_id, &active_asr, message.clone());
         emit_capsule(
             inner,
             CapsuleState::Error,
@@ -678,10 +754,9 @@ pub(super) async fn begin_session(inner: &Arc<Inner>) -> Result<(), String> {
         return Err(message);
     }
 
-    let active_asr = CredentialsVault::get_active_asr();
-
     if let Err(message) = ensure_microphone_permission(inner) {
         log::warn!("[coord] microphone permission gate failed: {message}");
+        append_begin_recorder_error_trace(inner, current_session_id, &active_asr, message.clone());
         emit_capsule(
             inner,
             CapsuleState::Error,
@@ -704,6 +779,7 @@ pub(super) async fn begin_session(inner: &Arc<Inner>) -> Result<(), String> {
         let status = inner.qingyu_local_asr.status();
         if let Some(message) = qingyu_local_asr_readiness_error(&status) {
             log::warn!("[coord] Qingyu local ASR readiness gate failed: {message}");
+            append_begin_asr_error_trace(inner, current_session_id, &active_asr, message.clone());
             emit_capsule(
                 inner,
                 CapsuleState::Error,
@@ -726,7 +802,16 @@ pub(super) async fn begin_session(inner: &Arc<Inner>) -> Result<(), String> {
         );
         let consumer: Arc<dyn crate::recorder::AudioConsumer> = buffer;
         start_recorder_and_enter_listening(inner, current_session_id, &active_asr, consumer)
-            .await?;
+            .await
+            .map_err(|error| {
+                append_begin_recorder_error_trace(
+                    inner,
+                    current_session_id,
+                    &active_asr,
+                    error.clone(),
+                );
+                error
+            })?;
         return Ok(());
     }
 
@@ -757,7 +842,16 @@ pub(super) async fn begin_session(inner: &Arc<Inner>) -> Result<(), String> {
         );
         let consumer: Arc<dyn crate::recorder::AudioConsumer> = local;
         start_recorder_and_enter_listening(inner, current_session_id, &active_asr, consumer)
-            .await?;
+            .await
+            .map_err(|error| {
+                append_begin_recorder_error_trace(
+                    inner,
+                    current_session_id,
+                    &active_asr,
+                    error.clone(),
+                );
+                error
+            })?;
         return Ok(());
     }
 
@@ -767,6 +861,12 @@ pub(super) async fn begin_session(inner: &Arc<Inner>) -> Result<(), String> {
             Ok(l) => l,
             Err(e) => {
                 log::error!("[coord] 本地 Qwen3-ASR 初始化失败: {e:#}");
+                append_begin_asr_error_trace(
+                    inner,
+                    current_session_id,
+                    &active_asr,
+                    format!("local ASR init failed: {e:#}"),
+                );
                 emit_capsule(
                     inner,
                     CapsuleState::Error,
@@ -788,7 +888,16 @@ pub(super) async fn begin_session(inner: &Arc<Inner>) -> Result<(), String> {
         );
         let consumer: Arc<dyn crate::recorder::AudioConsumer> = local;
         start_recorder_and_enter_listening(inner, current_session_id, &active_asr, consumer)
-            .await?;
+            .await
+            .map_err(|error| {
+                append_begin_recorder_error_trace(
+                    inner,
+                    current_session_id,
+                    &active_asr,
+                    error.clone(),
+                );
+                error
+            })?;
         return Ok(());
     }
 
@@ -801,7 +910,17 @@ pub(super) async fn begin_session(inner: &Arc<Inner>) -> Result<(), String> {
             current_session_id,
             ActiveAsr::QwenRealtime(Arc::clone(&asr)),
         );
-        start_recorder_for_starting(inner, current_session_id, &active_asr, consumer).await?;
+        start_recorder_for_starting(inner, current_session_id, &active_asr, consumer)
+            .await
+            .map_err(|error| {
+                append_begin_recorder_error_trace(
+                    inner,
+                    current_session_id,
+                    &active_asr,
+                    error.clone(),
+                );
+                error
+            })?;
 
         if let Err(e) = asr.open_session().await {
             log::error!("[coord] open Qwen realtime ASR session failed: {e}");
@@ -826,6 +945,12 @@ pub(super) async fn begin_session(inner: &Arc<Inner>) -> Result<(), String> {
                     asr.cancel();
                 }
             }
+            append_begin_asr_error_trace(
+                inner,
+                current_session_id,
+                &active_asr,
+                format!("open Qwen realtime ASR session failed: {e}"),
+            );
             discard_startup_resources_for_session(inner, current_session_id);
             emit_capsule(
                 inner,
@@ -877,7 +1002,17 @@ pub(super) async fn begin_session(inner: &Arc<Inner>) -> Result<(), String> {
             current_session_id,
             ActiveAsr::Bailian(Arc::clone(&asr)),
         );
-        start_recorder_for_starting(inner, current_session_id, &active_asr, consumer).await?;
+        start_recorder_for_starting(inner, current_session_id, &active_asr, consumer)
+            .await
+            .map_err(|error| {
+                append_begin_recorder_error_trace(
+                    inner,
+                    current_session_id,
+                    &active_asr,
+                    error.clone(),
+                );
+                error
+            })?;
 
         if let Err(e) = asr.open_session().await {
             log::error!("[coord] open Bailian ASR session failed: {e}");
@@ -902,6 +1037,12 @@ pub(super) async fn begin_session(inner: &Arc<Inner>) -> Result<(), String> {
                     asr.cancel();
                 }
             }
+            append_begin_asr_error_trace(
+                inner,
+                current_session_id,
+                &active_asr,
+                format!("open Bailian ASR session failed: {e}"),
+            );
             discard_startup_resources_for_session(inner, current_session_id);
             emit_capsule(
                 inner,
@@ -964,7 +1105,16 @@ pub(super) async fn begin_session(inner: &Arc<Inner>) -> Result<(), String> {
         );
         let consumer: Arc<dyn crate::recorder::AudioConsumer> = whisper;
         start_recorder_and_enter_listening(inner, current_session_id, &active_asr, consumer)
-            .await?;
+            .await
+            .map_err(|error| {
+                append_begin_recorder_error_trace(
+                    inner,
+                    current_session_id,
+                    &active_asr,
+                    error.clone(),
+                );
+                error
+            })?;
     } else if active_asr == crate::product::DOUBAO_ASR_PROVIDER_ID {
         let hotwords = enabled_hotwords(inner);
         let creds = read_volc_credentials();
@@ -976,10 +1126,21 @@ pub(super) async fn begin_session(inner: &Arc<Inner>) -> Result<(), String> {
             current_session_id,
             ActiveAsr::Volcengine(Arc::clone(&asr)),
         );
-        start_recorder_for_starting(inner, current_session_id, &active_asr, consumer).await?;
+        start_recorder_for_starting(inner, current_session_id, &active_asr, consumer)
+            .await
+            .map_err(|error| {
+                append_begin_recorder_error_trace(
+                    inner,
+                    current_session_id,
+                    &active_asr,
+                    error.clone(),
+                );
+                error
+            })?;
         open_volcengine_after_recorder_started(inner, current_session_id, asr, bridge).await?;
     } else {
         let message = format!("Unsupported ASR provider: {active_asr}");
+        append_begin_asr_error_trace(inner, current_session_id, &active_asr, message.clone());
         emit_capsule(
             inner,
             CapsuleState::Error,
@@ -1024,6 +1185,12 @@ async fn open_volcengine_after_recorder_started(
             }
             StartupRaceStatus::ActiveStarting => {}
         }
+        append_begin_asr_error_trace(
+            inner,
+            current_session_id,
+            crate::product::DOUBAO_ASR_PROVIDER_ID,
+            format!("open Doubao ASR session failed: {e}"),
+        );
         discard_startup_resources_for_session(inner, current_session_id);
         emit_capsule(
             inner,
@@ -1202,6 +1369,7 @@ pub(super) fn abort_recording_with_error(inner: &Arc<Inner>, message: String) {
         return;
     };
 
+    append_runtime_recorder_error_trace(inner, abort.session_id, message.clone());
     discard_startup_resources_for_session(inner, abort.session_id);
     restore_prepared_windows_ime_session(inner, abort.session_id);
     {
@@ -1309,8 +1477,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
         None => {
             restore_prepared_windows_ime_session(inner, current_session_id);
             inner.state.lock().phase = SessionPhase::Idle;
-            diagnostic_trace.llm.error = Some("missing active ASR session".to_string());
-            append_diagnostic_trace(inner, diagnostic_trace);
+            append_asr_error_trace(
+                inner,
+                diagnostic_trace,
+                "missing active ASR session".to_string(),
+            );
             return Ok(());
         }
     };
@@ -1338,8 +1509,7 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                         &mut diagnostic_trace,
                         asr.diagnostic_snapshot(),
                     );
-                    diagnostic_trace.llm.error = Some(format!("asr failed: {e}"));
-                    append_diagnostic_trace(inner, diagnostic_trace);
+                    append_asr_error_trace(inner, diagnostic_trace, format!("asr failed: {e}"));
                     emit_capsule(
                         inner,
                         CapsuleState::Error,
@@ -1365,8 +1535,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                         &mut diagnostic_trace,
                         asr.diagnostic_snapshot(),
                     );
-                    diagnostic_trace.llm.error = Some("asr global timeout".to_string());
-                    append_diagnostic_trace(inner, diagnostic_trace);
+                    append_asr_error_trace(
+                        inner,
+                        diagnostic_trace,
+                        "asr global timeout".to_string(),
+                    );
                     emit_capsule(
                         inner,
                         CapsuleState::Error,
@@ -1390,6 +1563,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                 Ok(Ok(r)) => r,
                 Ok(Err(e)) => {
                     log::error!("[coord] whisper transcribe failed: {e}");
+                    append_asr_error_trace(
+                        inner,
+                        diagnostic_trace,
+                        format!("whisper transcribe failed: {e}"),
+                    );
                     emit_capsule(
                         inner,
                         CapsuleState::Error,
@@ -1407,6 +1585,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                     log::error!(
                         "[coord] whisper 全局超时 {} 秒",
                         COORDINATOR_GLOBAL_TIMEOUT_SECS
+                    );
+                    append_asr_error_trace(
+                        inner,
+                        diagnostic_trace,
+                        "whisper global timeout".to_string(),
                     );
                     emit_capsule(
                         inner,
@@ -1433,6 +1616,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                 Ok(Ok(r)) => r,
                 Ok(Err(e)) => {
                     log::error!("[coord] Qwen realtime await final failed: {e}");
+                    append_asr_error_trace(
+                        inner,
+                        diagnostic_trace,
+                        format!("qwen realtime await final failed: {e}"),
+                    );
                     emit_capsule(
                         inner,
                         CapsuleState::Error,
@@ -1452,6 +1640,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                         COORDINATOR_GLOBAL_TIMEOUT_SECS
                     );
                     asr.cancel();
+                    append_asr_error_trace(
+                        inner,
+                        diagnostic_trace,
+                        "qwen realtime global timeout".to_string(),
+                    );
                     emit_capsule(
                         inner,
                         CapsuleState::Error,
@@ -1477,6 +1670,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                 Ok(Ok(r)) => r,
                 Ok(Err(e)) => {
                     log::error!("[coord] Bailian await final failed: {e}");
+                    append_asr_error_trace(
+                        inner,
+                        diagnostic_trace,
+                        format!("bailian await final failed: {e}"),
+                    );
                     emit_capsule(
                         inner,
                         CapsuleState::Error,
@@ -1496,6 +1694,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                         COORDINATOR_GLOBAL_TIMEOUT_SECS
                     );
                     asr.cancel();
+                    append_asr_error_trace(
+                        inner,
+                        diagnostic_trace,
+                        "bailian global timeout".to_string(),
+                    );
                     emit_capsule(
                         inner,
                         CapsuleState::Error,
@@ -1545,6 +1748,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                     Ok(tmp) => tmp,
                     Err(e) => {
                         log::error!("[coord] create Qingyu local ASR temp WAV failed: {e}");
+                        append_asr_error_trace(
+                            inner,
+                            diagnostic_trace,
+                            format!("create Qingyu local ASR temp WAV failed: {e}"),
+                        );
                         emit_capsule(
                             inner,
                             CapsuleState::Error,
@@ -1561,6 +1769,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                 };
                 if let Err(e) = std::fs::write(tmp.path(), wav) {
                     log::error!("[coord] write Qingyu local ASR temp WAV failed: {e}");
+                    append_asr_error_trace(
+                        inner,
+                        diagnostic_trace,
+                        format!("write Qingyu local ASR temp WAV failed: {e}"),
+                    );
                     emit_capsule(
                         inner,
                         CapsuleState::Error,
@@ -1579,6 +1792,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                     Ok(r) => r,
                     Err(e) => {
                         log::error!("[coord] Qingyu local ASR transcribe failed: {e:#}");
+                        append_asr_error_trace(
+                            inner,
+                            diagnostic_trace,
+                            format!("Qingyu local ASR transcribe failed: {e:#}"),
+                        );
                         emit_capsule(
                             inner,
                             CapsuleState::Error,
@@ -1614,10 +1832,20 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                         schedule_foundry_local_asr_release(inner, current_session_id);
                         restore_prepared_windows_ime_session(inner, current_session_id);
                         set_phase_idle_if_session_matches(inner, current_session_id);
+                        diagnostic_trace.session.cancelled = true;
+                        diagnostic_trace.insertion.status =
+                            Some("cancelledDuringLocalAsr".to_string());
+                        diagnostic_trace.insertion.method = Some("none".to_string());
+                        append_diagnostic_trace(inner, diagnostic_trace);
                         return Ok(());
                     }
                     log::error!("[coord] Foundry Local Whisper transcribe failed: {e:#}");
                     schedule_foundry_local_asr_release(inner, current_session_id);
+                    append_asr_error_trace(
+                        inner,
+                        diagnostic_trace,
+                        format!("Foundry Local Whisper transcribe failed: {e:#}"),
+                    );
                     emit_capsule(
                         inner,
                         CapsuleState::Error,
@@ -1647,6 +1875,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                 Ok(Ok(r)) => r,
                 Ok(Err(e)) => {
                     log::error!("[coord] local Qwen3-ASR transcribe failed: {e:#}");
+                    append_asr_error_trace(
+                        inner,
+                        diagnostic_trace,
+                        format!("local Qwen3-ASR transcribe failed: {e:#}"),
+                    );
                     emit_capsule(
                         inner,
                         CapsuleState::Error,
@@ -1664,6 +1897,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                     log::error!(
                         "[coord] local Qwen3-ASR 全局超时 {} 秒",
                         COORDINATOR_GLOBAL_TIMEOUT_SECS
+                    );
+                    append_asr_error_trace(
+                        inner,
+                        diagnostic_trace,
+                        "local Qwen3-ASR global timeout".to_string(),
                     );
                     emit_capsule(
                         inner,
@@ -1755,7 +1993,7 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
         }
         diagnostic_trace.session.mode = Some(format!("{:?}", prefs.default_mode));
         diagnostic_trace.llm.mode = Some(format!("{:?}", prefs.default_mode));
-        diagnostic_trace.llm.error = Some("emptyTranscript".to_string());
+        diagnostic_trace.asr.error = Some("emptyTranscript".to_string());
         diagnostic_trace.llm.final_text = Some(String::new());
         diagnostic_trace.llm.final_chars = Some(0);
         diagnostic_trace.insertion.status = Some(format!("{:?}", InsertStatus::Failed));

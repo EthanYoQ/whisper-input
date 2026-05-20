@@ -612,9 +612,7 @@ mod tests {
         assert!(asr.handle_text_message(
             r#"{"type":"conversation.item.input_audio_transcription.completed","transcript":"第二段。"}"#
         ));
-        assert!(!asr.handle_text_message(
-            r#"{"type":"session.finished","transcript":"第一段。"}"#
-        ));
+        assert!(!asr.handle_text_message(r#"{"type":"session.finished","transcript":"第一段。"}"#));
 
         let raw = rx.try_recv().unwrap().unwrap();
         assert_eq!(raw.text, "第一段。第二段。");
@@ -634,9 +632,8 @@ mod tests {
             st.bytes_received = 32_000;
         }
 
-        assert!(!asr.handle_text_message(
-            r#"{"type":"session.finished","transcript":"结束事件文本。"}"#
-        ));
+        assert!(!asr
+            .handle_text_message(r#"{"type":"session.finished","transcript":"结束事件文本。"}"#));
 
         let raw = rx.try_recv().unwrap().unwrap();
         assert_eq!(raw.text, "结束事件文本。");

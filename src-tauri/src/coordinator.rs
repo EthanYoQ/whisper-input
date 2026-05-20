@@ -184,6 +184,10 @@ struct PreparedWindowsImeSessionSlot {
 impl Coordinator {
     pub fn new() -> Self {
         let diagnostics = DiagnosticStore::new().expect("diagnostic store init");
+        Self::new_with_diagnostics(diagnostics)
+    }
+
+    pub fn new_with_diagnostics(diagnostics: DiagnosticStore) -> Self {
         let qingyu_local_asr = Arc::new(crate::asr::qingyu::QingyuLocalAsrService::default());
         #[cfg(target_os = "windows")]
         {
@@ -251,8 +255,10 @@ impl Coordinator {
     }
 
     #[cfg(target_os = "windows")]
-    pub fn new_with_foundry_runtime(foundry_local_runtime: Arc<FoundryLocalRuntime>) -> Self {
-        let diagnostics = DiagnosticStore::new().expect("diagnostic store init");
+    pub fn new_with_foundry_runtime(
+        foundry_local_runtime: Arc<FoundryLocalRuntime>,
+        diagnostics: DiagnosticStore,
+    ) -> Self {
         Self::new_with_foundry_runtime_and_qingyu(
             foundry_local_runtime,
             Arc::new(crate::asr::qingyu::QingyuLocalAsrService::default()),
@@ -3321,6 +3327,13 @@ mod tests {
         Uuid::from_u128(n)
     }
 
+    fn test_diagnostics() -> DiagnosticStore {
+        DiagnosticStore::with_path(std::env::temp_dir().join(format!(
+            "whisper-input-test-diagnostics-{}.jsonl",
+            Uuid::new_v4()
+        )))
+    }
+
     #[tokio::test]
     async fn hotkey_injection_gate_logs_pressed_and_cancels() {
         let _ = env_logger::builder()
@@ -3491,7 +3504,8 @@ mod tests {
     #[test]
     fn coordinator_shares_app_foundry_runtime() {
         let runtime = Arc::new(crate::asr::local::FoundryLocalRuntime::new());
-        let coordinator = Coordinator::new_with_foundry_runtime(Arc::clone(&runtime));
+        let coordinator =
+            Coordinator::new_with_foundry_runtime(Arc::clone(&runtime), test_diagnostics());
 
         assert!(Arc::ptr_eq(
             &runtime,
@@ -3528,7 +3542,7 @@ mod tests {
     #[test]
     fn foundry_release_uses_foundry_keep_loaded_preference() {
         let runtime = Arc::new(crate::asr::local::FoundryLocalRuntime::new());
-        let coordinator = Coordinator::new_with_foundry_runtime(runtime);
+        let coordinator = Coordinator::new_with_foundry_runtime(runtime, test_diagnostics());
         let mut prefs = coordinator.inner.prefs.get();
         prefs.local_asr_keep_loaded_secs = 3;
         prefs.foundry_local_asr_keep_loaded_secs = 7;
@@ -3541,7 +3555,7 @@ mod tests {
     #[test]
     fn foundry_release_guard_rejects_stale_session() {
         let runtime = Arc::new(crate::asr::local::FoundryLocalRuntime::new());
-        let coordinator = Coordinator::new_with_foundry_runtime(runtime);
+        let coordinator = Coordinator::new_with_foundry_runtime(runtime, test_diagnostics());
         let old_session_id = coordinator.inner.state.lock().session_id;
 
         assert!(foundry_release_session_is_current(
@@ -4675,6 +4689,7 @@ impl DiagnosticRecorderProbe {
         let pcm_bytes = self.pcm_bytes.load(Ordering::Relaxed);
         DiagnosticRecorderFacts {
             device_name: self.device_name.clone(),
+            error: None,
             input_sample_rate: None,
             output_sample_rate: Some(16_000),
             pcm_bytes: Some(pcm_bytes),
@@ -4687,12 +4702,12 @@ impl DiagnosticRecorderProbe {
 
 impl crate::recorder::AudioConsumer for DiagnosticRecorderProbe {
     fn consume_pcm_chunk(&self, pcm: &[u8]) {
+        self.downstream.consume_pcm_chunk(pcm);
         self.pcm_bytes
             .fetch_add(pcm.len() as u64, Ordering::Relaxed);
         let rms = pcm_i16_le_rms_milli(pcm);
         self.last_rms_milli.store(rms, Ordering::Relaxed);
         update_atomic_max(&self.peak_rms_milli, rms);
-        self.downstream.consume_pcm_chunk(pcm);
     }
 }
 

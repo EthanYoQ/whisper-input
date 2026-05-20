@@ -52,6 +52,7 @@ pub struct DiagnosticSession {
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticRecorderFacts {
     pub device_name: Option<String>,
+    pub error: Option<String>,
     pub input_sample_rate: Option<u32>,
     pub output_sample_rate: Option<u32>,
     pub pcm_bytes: Option<u64>,
@@ -64,6 +65,7 @@ pub struct DiagnosticRecorderFacts {
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticAsr {
     pub provider: Option<String>,
+    pub error: Option<String>,
     pub connected_at_ms: Option<u64>,
     pub first_server_message_at_ms: Option<u64>,
     pub last_server_message_at_ms: Option<u64>,
@@ -164,8 +166,11 @@ impl DiagnosticBundle {
         settings_summary: Value,
     ) -> Self {
         Self {
-            diagnostics,
-            history,
+            diagnostics: diagnostics
+                .into_iter()
+                .map(redact_diagnostic_trace)
+                .collect(),
+            history: history.into_iter().map(redact_history_session).collect(),
             log_excerpt: redact_secret_text(&log_excerpt),
             settings_summary: redact_secrets(settings_summary),
             environment: serde_json::json!({
@@ -174,6 +179,36 @@ impl DiagnosticBundle {
                 "arch": std::env::consts::ARCH,
             }),
         }
+    }
+}
+
+fn redact_diagnostic_trace(mut trace: DiagnosticTrace) -> DiagnosticTrace {
+    redact_optional_secret_text(&mut trace.session.front_app);
+    redact_optional_secret_text(&mut trace.recorder.device_name);
+    redact_optional_secret_text(&mut trace.recorder.error);
+    redact_optional_secret_text(&mut trace.asr.error);
+    redact_optional_secret_text(&mut trace.asr.socket_error);
+    redact_optional_secret_text(&mut trace.asr.server_log_id);
+    redact_optional_secret_text(&mut trace.asr.raw_text);
+    redact_optional_secret_text(&mut trace.llm.error);
+    redact_optional_secret_text(&mut trace.llm.final_text);
+    trace
+}
+
+fn redact_history_session(
+    mut session: crate::types::DictationSession,
+) -> crate::types::DictationSession {
+    session.raw_transcript = redact_secret_text(&session.raw_transcript);
+    session.final_text = redact_secret_text(&session.final_text);
+    if let Some(error_code) = session.error_code.as_mut() {
+        *error_code = redact_secret_text(error_code);
+    }
+    session
+}
+
+fn redact_optional_secret_text(value: &mut Option<String>) {
+    if let Some(text) = value.as_mut() {
+        *text = redact_secret_text(text);
     }
 }
 
@@ -446,6 +481,7 @@ mod tests {
             },
             recorder: DiagnosticRecorderFacts {
                 device_name: Some("Microphone".into()),
+                error: None,
                 input_sample_rate: Some(48000),
                 output_sample_rate: Some(16000),
                 pcm_bytes: Some(1_056_000),
@@ -455,6 +491,7 @@ mod tests {
             },
             asr: DiagnosticAsr {
                 provider: Some("doubao-streaming-asr-2".into()),
+                error: None,
                 connected_at_ms: Some(1850),
                 first_server_message_at_ms: Some(2310),
                 last_server_message_at_ms: Some(8600),
@@ -630,11 +667,14 @@ mod tests {
 
     #[test]
     fn export_bundle_contains_expected_sections() {
-        let traces = vec![sample_trace()];
+        let mut trace = sample_trace();
+        trace.asr.error = Some("upstream rejected api_key=secret".into());
+        trace.asr.raw_text = Some("normal speech\nAuthorization: Bearer secret".into());
+        let traces = vec![trace];
         let history = vec![crate::types::DictationSession {
             id: "history-1".into(),
             created_at: "2026-05-21T00:00:00Z".into(),
-            raw_transcript: "raw".into(),
+            raw_transcript: "raw\nsk-secret".into(),
             final_text: "final".into(),
             mode: crate::types::PolishMode::Light,
             app_bundle_id: None,
@@ -658,6 +698,12 @@ mod tests {
         assert_eq!(json["history"].as_array().unwrap().len(), 1);
         assert_eq!(json["logExcerpt"], "log tail\n[REDACTED LINE]");
         assert_eq!(json["settingsSummary"]["apiKey"], "[REDACTED]");
+        assert_eq!(json["diagnostics"][0]["asr"]["error"], "[REDACTED LINE]");
+        assert_eq!(
+            json["diagnostics"][0]["asr"]["rawText"],
+            "normal speech\n[REDACTED LINE]"
+        );
+        assert_eq!(json["history"][0]["rawTranscript"], "raw\n[REDACTED LINE]");
     }
 
     #[test]
