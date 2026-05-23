@@ -2336,6 +2336,19 @@ pub mod prompts {
         \u{201C}编一编\u{201D}\u{2192}\u{201C}编译\u{201D}、\u{201C}的 / 得 / 地\u{201D}用法、\u{201C}做 / 作\u{201D} 等常见错别字。\
         专有名词（见 # 热词）、人名、品牌名、不在常见中文词典里的词原样保留，\u{4E0D}强行改字；改了之后含义会发生变化的不改。";
 
+    const ASR_CORRECTION_BLOCK: &str = "# ASR 纠错\n\
+        原始转写来自语音识别，可能存在同音、近音、形近、断词、大小写或中英混输错误。\
+        你需要在当前 mode 的整理过程中做保守的上下文纠错，但只修正从上下文、热词或常见 ASR 错误模式能够明确判断的错误。\n\
+        - 优先修正明显同音 / 近音 / 形近错误：如\u{201C}跟目录 / 根木鹿\u{201D}\u{2192}\u{201C}根目录\u{201D}、\
+        \u{201C}代码厂\u{201D}\u{2192}\u{201C}代码仓\u{201D}、\u{201C}编一编\u{201D}\u{2192}\u{201C}编译\u{201D}。\n\
+        - 专有名词按上下文和热词优先：医院名、药品名、人名、品牌名、项目名、会议名、产品名、分支名、\
+        模型名、英文缩写和代码标识应尽量恢复为正确写法；例如 GitHub、README、main、API、Qwen、Gemini、Doubao、齐鲁医院、青医。\n\
+        - 数字和格式必须保真：1.0、2.5、v1.3.6、百分比、金额、日期、剂量、路径、URL、命令、型号和版本号\
+        不得改写成中文读法或近似表达。\n\
+        - 只能做局部纠错，\u{4E0D}为了通顺而替换用户原本词汇；无法确认时保留原字词，\u{4E0D}输出猜测版本。\n\
+        - 不得根据外部知识、常识或模型记忆补事实；不得新增医院、药品、客户、日期、结论、承诺或原因。\n\
+        - 纠错后仍必须服从当前 mode：轻度润色\u{4E0D}重组，清晰结构才编号，正式表达才改成正式文档。";
+
     const OUTPUT_BLOCK: &str = "# 输出\n\
         直接输出最终文本正文。需要结构化时直接从标题 / 段落 / 编号开始。\n\
         当前 mode 是清晰结构或正式表达，且输出包含标题、小标题或编号时，必须保留真实换行：\
@@ -2582,8 +2595,8 @@ pub mod prompts {
         };
 
         format!(
-            "{}\n\n{}\n\n{}\n\n{}",
-            ROLE_BLOCK, task_and_example, COMMON_RULES, OUTPUT_BLOCK
+            "{}\n\n{}\n\n{}\n\n{}\n\n{}",
+            ROLE_BLOCK, task_and_example, COMMON_RULES, ASR_CORRECTION_BLOCK, OUTPUT_BLOCK
         )
     }
 
@@ -2700,6 +2713,61 @@ mod tests {
     #[test]
     fn built_in_prompt_variant_is_not_user_visible_config() {
         assert_eq!(VoicePromptVariant::default(), VoicePromptVariant::Compact);
+    }
+
+    #[test]
+    fn asr_contextual_correction_prompt_is_present_for_all_polish_modes() {
+        for mode in [
+            PolishMode::Raw,
+            PolishMode::Light,
+            PolishMode::Structured,
+            PolishMode::Formal,
+        ] {
+            let prompt = prompts::system_prompt(mode);
+            assert!(
+                prompt.contains("# ASR 纠错"),
+                "{mode:?} prompt should include the shared ASR correction section"
+            );
+            assert!(
+                prompt.contains("只修正从上下文、热词或常见 ASR 错误模式能够明确判断的错误"),
+                "{mode:?} prompt should constrain correction to clear evidence"
+            );
+            assert!(
+                prompt.contains("无法确认时保留原字词"),
+                "{mode:?} prompt should preserve uncertain transcript text"
+            );
+            assert!(
+                prompt.contains("不得根据外部知识、常识或模型记忆补事实"),
+                "{mode:?} prompt should forbid fact invention"
+            );
+        }
+    }
+
+    #[test]
+    fn asr_contextual_correction_prompt_covers_domain_and_product_terms() {
+        let prompt = prompts::system_prompt(PolishMode::Light);
+        assert!(prompt.contains("医院名"));
+        assert!(prompt.contains("药品名"));
+        assert!(prompt.contains("GitHub"));
+        assert!(prompt.contains("main"));
+        assert!(prompt.contains("1.0、2.5、v1.3.6"));
+        assert!(prompt.contains("齐鲁医院"));
+        assert!(prompt.contains("青医"));
+    }
+
+    #[test]
+    fn asr_contextual_correction_does_not_relax_mode_boundaries() {
+        let light = prompts::system_prompt(PolishMode::Light);
+        assert!(light.contains("不改结构"));
+        assert!(light.contains("不改成编号结构"));
+
+        let structured = prompts::system_prompt(PolishMode::Structured);
+        assert!(structured.contains("编号结构"));
+        assert!(structured.contains("一级主题和二级子项都必须各占独立行"));
+
+        let formal = prompts::system_prompt(PolishMode::Formal);
+        assert!(formal.contains("正式邮件"));
+        assert!(formal.contains("正式文档的段落格式必须清楚"));
     }
 
     #[test]
