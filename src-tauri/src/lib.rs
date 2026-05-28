@@ -11,6 +11,7 @@
 //! - commands: Tauri IPC surface
 
 mod asr;
+mod autostart;
 mod audio_mute;
 mod combo_hotkey;
 mod commands;
@@ -110,6 +111,7 @@ pub fn run() {
         .setup(move |app| {
             init_file_logger();
             log::info!("=== {} 启动 ===", crate::product::PRODUCT_NAME);
+            crate::autostart::repair_stale_autostart_entry();
             qingyu_local_asr.bind_app(app.handle().clone());
 
             // Capsule 启动时定位到屏幕底部居中并隐藏；coordinator 按需显示。
@@ -266,6 +268,8 @@ pub fn run() {
             commands::get_update_channel,
             commands::set_update_channel,
             commands::fetch_latest_beta_release,
+            autostart::get_autostart_status,
+            autostart::set_autostart_enabled,
             commands::get_hotkey_status,
             commands::get_hotkey_capability,
             commands::set_shortcut_recording_active,

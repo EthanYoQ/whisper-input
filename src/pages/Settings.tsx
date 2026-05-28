@@ -117,19 +117,21 @@ const SECTION_ICON_BY_ID: Record<SettingsSectionId, string> = {
   about: 'info',
 };
 
-async function autostartIsEnabled(): Promise<boolean> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  return invoke<boolean>('plugin:autostart|is_enabled');
+interface AutostartStatus {
+  enabled: boolean;
+  stale: boolean;
+  registeredPath: string | null;
+  expectedPath: string;
 }
 
-async function autostartEnable(): Promise<void> {
+async function getAutostartStatus(): Promise<AutostartStatus> {
   const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('plugin:autostart|enable');
+  return invoke<AutostartStatus>('get_autostart_status');
 }
 
-async function autostartDisable(): Promise<void> {
+async function setAutostartEnabled(enabled: boolean): Promise<AutostartStatus> {
   const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('plugin:autostart|disable');
+  return invoke<AutostartStatus>('set_autostart_enabled', { enabled });
 }
 
 export function Settings({ embedded = false, initialSection = 'models' }: SettingsProps) {
@@ -1294,10 +1296,10 @@ function AutostartRow() {
       return;
     }
     let cancelled = false;
-    autostartIsEnabled()
-      .then((v: boolean) => {
+    getAutostartStatus()
+      .then((status: AutostartStatus) => {
         if (!cancelled) {
-          setEnabled(v);
+          setEnabled(status.enabled);
           setLoaded(true);
         }
       })
@@ -1315,8 +1317,8 @@ function AutostartRow() {
     setError(null);
     try {
       if (!isTauri) return;
-      if (next) await autostartEnable();
-      else await autostartDisable();
+      const status = await setAutostartEnabled(next);
+      setEnabled(status.enabled);
     } catch (err) {
       console.error('[autostart] toggle failed', err);
       setEnabled(!next);

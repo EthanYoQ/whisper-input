@@ -5,6 +5,7 @@ dist/
 .env
 .vite/
 .artifacts/
+.codegraph/
 
 # Tauri
 src-tauri/target/
