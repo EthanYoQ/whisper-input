@@ -1518,13 +1518,29 @@ fn mark_translation_modifier_seen(inner: &Arc<Inner>) {
     }
 }
 
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ShortcutRecorderKeyPayload {
+    code: &'static str,
+    pressed: bool,
+}
+
 fn hotkey_bridge_loop(inner: Arc<Inner>, rx: mpsc::Receiver<HotkeyEvent>) {
     while let Ok(evt) = rx.recv() {
-        if inner.shortcut_recording_active.load(Ordering::SeqCst) {
-            continue;
-        }
+        let recording_active = inner.shortcut_recording_active.load(Ordering::SeqCst);
         let inner_cloned = Arc::clone(&inner);
         match evt {
+            HotkeyEvent::ShortcutRecorderKey { code, pressed } => {
+                if recording_active {
+                    if let Some(app) = inner.app.lock().as_ref() {
+                        let _ = app.emit(
+                            "shortcut-recorder:key",
+                            ShortcutRecorderKeyPayload { code, pressed },
+                        );
+                    }
+                }
+            }
+            _ if recording_active => {}
             HotkeyEvent::Pressed => {
                 async_runtime::spawn(async move { handle_pressed_edge(&inner_cloned).await });
             }

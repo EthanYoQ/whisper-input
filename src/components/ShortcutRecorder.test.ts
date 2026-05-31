@@ -1,5 +1,6 @@
 import {
   isShortcutModifierKey,
+  keyboardLikeEventFromNativeHotkeyCode,
   modifierPrimaryFromCode,
   modifiersFromKeyboardLikeEvent,
   primaryFromKeyboardLikeEvent,
@@ -53,5 +54,23 @@ function assertDeepEqual(actual: unknown, expected: unknown, name: string) {
     }, { isMac: false, isWindows: true }),
     [],
     'AltGraph does not add synthetic ctrl/alt modifiers to a single-key shortcut',
+  );
+  const nativeRightAlt = keyboardLikeEventFromNativeHotkeyCode('AltRight');
+  assertDeepEqual(
+    nativeRightAlt,
+    {
+      key: 'AltGraph',
+      code: 'AltRight',
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+    },
+    'Native Windows recorder event for physical right Alt maps to an AltGraph keyboard-like event',
+  );
+  assertEqual(
+    modifierPrimaryFromCode(nativeRightAlt?.code ?? '', nativeRightAlt?.key ?? '', { isMac: false, isWindows: true }),
+    'RightAlt',
+    'Native Windows recorder event records RightAlt',
   );
 }

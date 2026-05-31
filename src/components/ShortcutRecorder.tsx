@@ -59,10 +59,9 @@ export function ShortcutRecorder({
     }
   };
 
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (e: KeyboardLikeEvent, stopEvent: () => void) => {
     if (!recording || disabled) return;
-    e.preventDefault();
-    e.stopPropagation();
+    stopEvent();
     if (e.key === 'Escape') {
       setRecording(false);
       setError(null);
@@ -87,16 +86,76 @@ export function ShortcutRecorder({
     if (primary) void finish({ primary, modifiers: modifiersFromKeyboardLikeEvent(e) });
   };
 
-  const onKeyUp = (e: KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyUp = (e: KeyboardLikeEvent, stopEvent: () => void) => {
     if (!recording || disabled || !isShortcutModifierKey(e.key)) return;
-    e.preventDefault();
-    e.stopPropagation();
+    stopEvent();
     const primary = modifierPrimaryFromCode(e.code, e.key);
     if (primary && pendingModifier.current?.primary === primary) {
       const binding = pendingModifier.current;
       clearPendingModifier();
       void finish(binding);
     }
+  };
+
+  useEffect(() => {
+    if (!recording || disabled) return undefined;
+
+    let unlistenNative: (() => void) | null = null;
+    let cancelled = false;
+    const stopEvent = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    const onWindowKeyDown = (event: globalThis.KeyboardEvent) => {
+      handleKeyDown(event, () => stopEvent(event));
+    };
+    const onWindowKeyUp = (event: globalThis.KeyboardEvent) => {
+      handleKeyUp(event, () => stopEvent(event));
+    };
+
+    void import('@tauri-apps/api/event')
+      .then(({ listen }) =>
+        listen<ShortcutRecorderNativeHotkeyEvent>('shortcut-recorder:key', event => {
+          const keyboardEvent = keyboardLikeEventFromNativeHotkeyCode(event.payload.code);
+          if (!keyboardEvent) return;
+          if (event.payload.pressed) {
+            handleKeyDown(keyboardEvent, () => {});
+          } else {
+            handleKeyUp(keyboardEvent, () => {});
+          }
+        }),
+      )
+      .then(unlisten => {
+        if (cancelled) {
+          unlisten();
+        } else {
+          unlistenNative = unlisten;
+        }
+      })
+      .catch(() => {});
+
+    window.addEventListener('keydown', onWindowKeyDown, true);
+    window.addEventListener('keyup', onWindowKeyUp, true);
+    return () => {
+      cancelled = true;
+      if (unlistenNative) unlistenNative();
+      window.removeEventListener('keydown', onWindowKeyDown, true);
+      window.removeEventListener('keyup', onWindowKeyUp, true);
+    };
+  }, [recording, disabled]);
+
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    handleKeyDown(e, () => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  };
+
+  const onKeyUp = (e: KeyboardEvent<HTMLDivElement>) => {
+    handleKeyUp(e, () => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
   };
 
   const rootStyle: CSSProperties = {
@@ -168,6 +227,34 @@ type KeyboardLikeEvent = Pick<
   KeyboardEvent,
   'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
 >;
+
+type ShortcutRecorderNativeHotkeyEvent = {
+  code: string;
+  pressed: boolean;
+};
+
+export function keyboardLikeEventFromNativeHotkeyCode(code: string): KeyboardLikeEvent | null {
+  const codeToKey: Record<string, string> = {
+    AltRight: 'AltGraph',
+    AltLeft: 'Alt',
+    ControlRight: 'Control',
+    ControlLeft: 'Control',
+    ShiftRight: 'Shift',
+    ShiftLeft: 'Shift',
+    MetaRight: 'Meta',
+    MetaLeft: 'Meta',
+  };
+  const key = codeToKey[code];
+  if (!key) return null;
+  return {
+    key,
+    code,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+  };
+}
 
 export function modifiersFromKeyboardLikeEvent(
   e: KeyboardLikeEvent,

@@ -25,6 +25,7 @@ pub enum HotkeyEvent {
     Pressed,
     Released,
     Cancelled,
+    ShortcutRecorderKey { code: &'static str, pressed: bool },
     /// Shift（或未来配置项指定的修饰键）按下边沿。可在录音过程中任何时刻产生；
     /// 上层据此切换到翻译输出管线。详见 issue #4。
     TranslationModifierPressed,
@@ -799,6 +800,7 @@ mod platform {
     const VK_RCONTROL: u32 = 0xA3;
     const VK_LMENU: u32 = 0xA4;
     const VK_RMENU: u32 = 0xA5;
+    const VK_LWIN: u32 = 0x5B;
     const VK_RWIN: u32 = 0x5C;
     const LLKHF_INJECTED: u32 = 0x0000_0010;
     const ACCEPT_INJECTED_ENV: &str = "OPENLESS_ACCEPT_SYNTHETIC_HOTKEY_EVENTS";
@@ -952,6 +954,29 @@ mod platform {
 
     fn dispatch_keyboard_event(ctx: &CallbackContext, vk_code: u32, message: usize) -> bool {
         if ctx.shared.shortcut_recording_active.load(Ordering::SeqCst) {
+            if let Some(code) = shortcut_recorder_code_from_vk(vk_code) {
+                match message {
+                    WM_KEYDOWN | WM_SYSKEYDOWN => {
+                        send_or_log(
+                            &ctx.tx,
+                            HotkeyEvent::ShortcutRecorderKey {
+                                code,
+                                pressed: true,
+                            },
+                        );
+                    }
+                    WM_KEYUP | WM_SYSKEYUP => {
+                        send_or_log(
+                            &ctx.tx,
+                            HotkeyEvent::ShortcutRecorderKey {
+                                code,
+                                pressed: false,
+                            },
+                        );
+                    }
+                    _ => {}
+                }
+            }
             return false;
         }
 
@@ -1067,6 +1092,20 @@ mod platform {
             HotkeyTrigger::LeftOption => VK_LMENU,
             HotkeyTrigger::Fn => VK_RCONTROL,
             HotkeyTrigger::Custom => unreachable!("custom combo hotkeys use ComboHotkeyMonitor"),
+        }
+    }
+
+    fn shortcut_recorder_code_from_vk(vk_code: u32) -> Option<&'static str> {
+        match vk_code {
+            VK_RMENU => Some("AltRight"),
+            VK_LMENU => Some("AltLeft"),
+            VK_RCONTROL => Some("ControlRight"),
+            VK_LCONTROL => Some("ControlLeft"),
+            VK_RSHIFT => Some("ShiftRight"),
+            VK_LSHIFT => Some("ShiftLeft"),
+            VK_RWIN => Some("MetaRight"),
+            VK_LWIN => Some("MetaLeft"),
+            _ => None,
         }
     }
 
@@ -1220,7 +1259,7 @@ mod platform {
         }
 
         #[test]
-        fn windows_shortcut_recording_passes_right_alt_through_to_webview() {
+        fn windows_shortcut_recording_reports_right_alt_without_swallowing() {
             let shared = shared(HotkeyTrigger::RightAlt);
             shared
                 .shortcut_recording_active
@@ -1229,7 +1268,19 @@ mod platform {
 
             assert!(!dispatch_keyboard_event(&ctx, VK_RMENU, WM_KEYDOWN));
             assert!(!dispatch_keyboard_event(&ctx, VK_RMENU, WM_KEYUP));
-            assert_eq!(drain(&rx), Vec::<HotkeyEvent>::new());
+            assert_eq!(
+                drain(&rx),
+                vec![
+                    HotkeyEvent::ShortcutRecorderKey {
+                        code: "AltRight",
+                        pressed: true,
+                    },
+                    HotkeyEvent::ShortcutRecorderKey {
+                        code: "AltRight",
+                        pressed: false,
+                    },
+                ]
+            );
         }
     }
 }
