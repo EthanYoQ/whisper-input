@@ -295,9 +295,15 @@ function Reset-ArtifactsRoot {
   }
 
   $resolvedAppRoot = (Resolve-Path $appRoot).Path
+  $projectRoot = (Resolve-Path (Join-Path $appRoot "..")).Path
+  $allowedProjectArtifactsRoot = Join-Path $projectRoot "app"
   if (Test-Path $ArtifactsRoot) {
     $resolvedArtifactsRoot = (Resolve-Path $ArtifactsRoot).Path
-    if (-not $resolvedArtifactsRoot.StartsWith($resolvedAppRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    $insideAppRoot = $resolvedArtifactsRoot.Equals($resolvedAppRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
+      $resolvedArtifactsRoot.StartsWith("$resolvedAppRoot\", [System.StringComparison]::OrdinalIgnoreCase)
+    $insideProjectArtifactsRoot = $resolvedArtifactsRoot.Equals($allowedProjectArtifactsRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
+      $resolvedArtifactsRoot.StartsWith("$allowedProjectArtifactsRoot\", [System.StringComparison]::OrdinalIgnoreCase)
+    if (-not $insideAppRoot -and -not $insideProjectArtifactsRoot) {
       throw "-CleanArtifacts refuses to delete output outside the app root: $resolvedArtifactsRoot"
     }
     Remove-Item -LiteralPath $resolvedArtifactsRoot -Recurse -Force

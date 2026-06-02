@@ -17,6 +17,7 @@ export function ShortcutRecorder({
 }) {
   const { t } = useTranslation();
   const [recording, setRecording] = useState(false);
+  const [arming, setArming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pendingModifier = useRef<ShortcutBinding | null>(null);
   const pendingTimer = useRef<number | null>(null);
@@ -27,6 +28,21 @@ export function ShortcutRecorder({
       pendingTimer.current = null;
     }
     pendingModifier.current = null;
+  };
+
+  const startRecording = async () => {
+    if (disabled || recording || arming) return;
+    setArming(true);
+    setError(null);
+    clearPendingModifier();
+    try {
+      await setShortcutRecordingActive(true);
+      setRecording(true);
+    } catch {
+      setRecording(true);
+    } finally {
+      setArming(false);
+    }
   };
 
   useEffect(() => () => {
@@ -180,7 +196,7 @@ export function ShortcutRecorder({
     borderRadius: 6,
     fontFamily: 'inherit',
     fontWeight: 500,
-    cursor: recording || disabled ? 'default' : 'pointer',
+    cursor: recording || arming || disabled ? 'default' : 'pointer',
     opacity: disabled ? 0.68 : 1,
     marginLeft: alignRecordButton ? 'auto' : undefined,
   };
@@ -192,16 +208,11 @@ export function ShortcutRecorder({
           {formatComboLabel(value)}
         </span>
         <button
-          onClick={() => {
-            if (disabled) return;
-            setRecording(true);
-            setError(null);
-            clearPendingModifier();
-          }}
-          disabled={recording || disabled}
+          onClick={() => void startRecording()}
+          disabled={recording || arming || disabled}
           style={recordButtonStyle}
         >
-          {recording ? t('settings.recording.comboRecordHint') : t('settings.recording.comboRecordBtn')}
+          {recording || arming ? t('settings.recording.comboRecordHint') : t('settings.recording.comboRecordBtn')}
         </button>
       </div>
       {recording && (

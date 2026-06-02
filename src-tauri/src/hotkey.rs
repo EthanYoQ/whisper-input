@@ -794,6 +794,8 @@ mod platform {
 
     const VK_ESCAPE: u32 = 0x1B;
     const VK_SHIFT: u32 = 0x10;
+    const VK_CONTROL: u32 = 0x11;
+    const VK_MENU: u32 = 0x12;
     const VK_LSHIFT: u32 = 0xA0;
     const VK_RSHIFT: u32 = 0xA1;
     const VK_LCONTROL: u32 = 0xA2;
@@ -802,6 +804,7 @@ mod platform {
     const VK_RMENU: u32 = 0xA5;
     const VK_LWIN: u32 = 0x5B;
     const VK_RWIN: u32 = 0x5C;
+    const LLKHF_EXTENDED: u32 = 0x0000_0001;
     const LLKHF_INJECTED: u32 = 0x0000_0010;
     const ACCEPT_INJECTED_ENV: &str = "OPENLESS_ACCEPT_SYNTHETIC_HOTKEY_EVENTS";
 
@@ -933,7 +936,8 @@ mod platform {
             if let Some(ctx) = callback_context() {
                 let keyboard = *(lparam.0 as *const KBDLLHOOKSTRUCT);
                 if keyboard.flags.0 & LLKHF_INJECTED == 0 || accept_injected_events() {
-                    if dispatch_keyboard_event(ctx, keyboard.vkCode, wparam.0) {
+                    let vk_code = normalize_modifier_vk_code(keyboard.vkCode, keyboard.flags.0);
+                    if dispatch_keyboard_event(ctx, vk_code, wparam.0) {
                         return LRESULT(1);
                     }
                 }
@@ -1050,6 +1054,27 @@ mod platform {
             _ => {}
         }
         true
+    }
+
+    fn normalize_modifier_vk_code(vk_code: u32, flags: u32) -> u32 {
+        let extended = flags & LLKHF_EXTENDED != 0;
+        match vk_code {
+            VK_CONTROL => {
+                if extended {
+                    VK_RCONTROL
+                } else {
+                    VK_LCONTROL
+                }
+            }
+            VK_MENU => {
+                if extended {
+                    VK_RMENU
+                } else {
+                    VK_LMENU
+                }
+            }
+            _ => vk_code,
+        }
     }
 
     fn handle_optional_modifier_trigger(
@@ -1256,6 +1281,63 @@ mod platform {
                 WM_KEYDOWN
             ));
             assert_eq!(drain(&right_alt_rx), vec![HotkeyEvent::Pressed]);
+        }
+
+        #[test]
+        fn windows_generic_alt_vk_is_normalized_by_extended_flag() {
+            assert_eq!(normalize_modifier_vk_code(VK_MENU, 0), VK_LMENU);
+            assert_eq!(
+                normalize_modifier_vk_code(VK_MENU, LLKHF_EXTENDED),
+                VK_RMENU
+            );
+
+            let shared = shared(HotkeyTrigger::RightAlt);
+            let (ctx, rx) = callback_context(shared);
+
+            assert!(!dispatch_keyboard_event(
+                &ctx,
+                normalize_modifier_vk_code(VK_MENU, 0),
+                WM_KEYDOWN
+            ));
+            assert!(dispatch_keyboard_event(
+                &ctx,
+                normalize_modifier_vk_code(VK_MENU, LLKHF_EXTENDED),
+                WM_KEYDOWN
+            ));
+            assert_eq!(drain(&rx), vec![HotkeyEvent::Pressed]);
+        }
+
+        #[test]
+        fn windows_shortcut_recording_reports_generic_extended_alt_as_right_alt() {
+            let shared = shared(HotkeyTrigger::RightAlt);
+            shared
+                .shortcut_recording_active
+                .store(true, Ordering::SeqCst);
+            let (ctx, rx) = callback_context(shared);
+
+            assert!(!dispatch_keyboard_event(
+                &ctx,
+                normalize_modifier_vk_code(VK_MENU, LLKHF_EXTENDED),
+                WM_KEYDOWN
+            ));
+            assert!(!dispatch_keyboard_event(
+                &ctx,
+                normalize_modifier_vk_code(VK_MENU, LLKHF_EXTENDED),
+                WM_KEYUP
+            ));
+            assert_eq!(
+                drain(&rx),
+                vec![
+                    HotkeyEvent::ShortcutRecorderKey {
+                        code: "AltRight",
+                        pressed: true,
+                    },
+                    HotkeyEvent::ShortcutRecorderKey {
+                        code: "AltRight",
+                        pressed: false,
+                    },
+                ]
+            );
         }
 
         #[test]
