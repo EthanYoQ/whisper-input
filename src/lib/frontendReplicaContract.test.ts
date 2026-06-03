@@ -162,8 +162,9 @@ assert(
 assert(
   ipcSource.includes("hotkey: { trigger: 'rightAlt'") &&
     ipcSource.includes("dictationHotkey: { primary: 'RightAlt', modifiers: [] }") &&
-    ipcSource.includes('默认建议使用“右 Alt + 单击”'),
-  '前端 mock / 预览默认听写快捷键必须是 Right ALT',
+    ipcSource.includes("mode: 'hold'") &&
+    ipcSource.includes('默认建议使用“按住右 Alt 说话”'),
+  '前端 mock / 预览默认听写快捷键必须是 Right ALT 按住说话',
 );
 
 assert(

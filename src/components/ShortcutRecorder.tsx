@@ -17,7 +17,6 @@ export function ShortcutRecorder({
 }) {
   const { t } = useTranslation();
   const [recording, setRecording] = useState(false);
-  const [arming, setArming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pendingModifier = useRef<ShortcutBinding | null>(null);
   const pendingTimer = useRef<number | null>(null);
@@ -30,32 +29,17 @@ export function ShortcutRecorder({
     pendingModifier.current = null;
   };
 
-  const startRecording = async () => {
-    if (disabled || recording || arming) return;
-    setArming(true);
+  const startRecording = () => {
+    if (disabled || recording) return;
     setError(null);
     clearPendingModifier();
-    try {
-      await setShortcutRecordingActive(true);
-      setRecording(true);
-    } catch {
-      setRecording(true);
-    } finally {
-      setArming(false);
-    }
+    setRecording(true);
   };
 
   useEffect(() => () => {
     clearPendingModifier();
     void setShortcutRecordingActive(false);
   }, []);
-
-  useEffect(() => {
-    void setShortcutRecordingActive(recording);
-    return () => {
-      if (recording) void setShortcutRecordingActive(false);
-    };
-  }, [recording]);
 
   useEffect(() => {
     if (!disabled || !recording) return;
@@ -130,8 +114,8 @@ export function ShortcutRecorder({
     };
 
     void import('@tauri-apps/api/event')
-      .then(({ listen }) =>
-        listen<ShortcutRecorderNativeHotkeyEvent>('shortcut-recorder:key', event => {
+      .then(async ({ listen }) => {
+        const unlisten = await listen<ShortcutRecorderNativeHotkeyEvent>('shortcut-recorder:key', event => {
           const keyboardEvent = keyboardLikeEventFromNativeHotkeyCode(event.payload.code);
           if (!keyboardEvent) return;
           if (event.payload.pressed) {
@@ -139,13 +123,12 @@ export function ShortcutRecorder({
           } else {
             handleKeyUp(keyboardEvent, () => {});
           }
-        }),
-      )
-      .then(unlisten => {
+        });
         if (cancelled) {
           unlisten();
         } else {
           unlistenNative = unlisten;
+          void setShortcutRecordingActive(true);
         }
       })
       .catch(() => {});
@@ -155,6 +138,7 @@ export function ShortcutRecorder({
     return () => {
       cancelled = true;
       if (unlistenNative) unlistenNative();
+      void setShortcutRecordingActive(false);
       window.removeEventListener('keydown', onWindowKeyDown, true);
       window.removeEventListener('keyup', onWindowKeyUp, true);
     };
@@ -196,7 +180,7 @@ export function ShortcutRecorder({
     borderRadius: 6,
     fontFamily: 'inherit',
     fontWeight: 500,
-    cursor: recording || arming || disabled ? 'default' : 'pointer',
+    cursor: recording || disabled ? 'default' : 'pointer',
     opacity: disabled ? 0.68 : 1,
     marginLeft: alignRecordButton ? 'auto' : undefined,
   };
@@ -208,11 +192,11 @@ export function ShortcutRecorder({
           {formatComboLabel(value)}
         </span>
         <button
-          onClick={() => void startRecording()}
-          disabled={recording || arming || disabled}
+          onClick={startRecording}
+          disabled={recording || disabled}
           style={recordButtonStyle}
         >
-          {recording || arming ? t('settings.recording.comboRecordHint') : t('settings.recording.comboRecordBtn')}
+          {recording ? t('settings.recording.comboRecordHint') : t('settings.recording.comboRecordBtn')}
         </button>
       </div>
       {recording && (

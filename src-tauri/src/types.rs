@@ -302,8 +302,8 @@ pub struct UserPreferences {
     /// 默认 true（更接近用户习惯）。
     #[serde(default = "default_true")]
     pub streaming_insert_save_clipboard: bool,
-    /// 一次性迁移标记：Windows 历史配置里出现过默认 RightAlt 被保存成 Hold 模式，
-    /// 用户短按时会在 ASR 握手完成前立即停止，看起来像右 Alt 失效。
+    /// Windows RightAlt 历史迁移标记。保留字段仅为兼容旧 preferences，不再修改
+    /// 用户选择的 Hold / Toggle 模式。
     #[serde(default)]
     pub right_alt_hotkey_migration_version: u32,
 }
@@ -1073,7 +1073,7 @@ impl HotkeyCapability {
                 supports_side_specific_modifiers: true,
                 explicit_fallback_available: false,
                 status_hint: Some(
-                    "默认建议使用“右 Alt + 单击”；若更习惯按住说话，可在录音设置里切回“按住”。若无响应，可在权限页查看 hook 安装状态。"
+                    "默认建议使用“按住右 Alt 说话”；若无响应，可在权限页查看 hook 安装状态。"
                         .into(),
                 ),
             };
@@ -1176,7 +1176,7 @@ impl Default for HotkeyBinding {
         {
             Self {
                 trigger: HotkeyTrigger::RightAlt,
-                mode: HotkeyMode::Toggle,
+                mode: HotkeyMode::Hold,
                 keys: None,
             }
         }
@@ -1495,9 +1495,16 @@ mod tests {
         let prefs = UserPreferences::default();
 
         assert_eq!(prefs.hotkey.trigger, HotkeyTrigger::RightAlt);
+        assert_eq!(prefs.hotkey.mode, HotkeyMode::Hold);
         assert_eq!(prefs.hotkey.effective_codes(), vec!["AltRight".to_string()]);
         assert_eq!(prefs.dictation_hotkey.primary, "RightAlt");
         assert!(prefs.dictation_hotkey.modifiers.is_empty());
+
+        let capability = HotkeyCapability::current();
+        assert_eq!(
+            capability.status_hint.as_deref(),
+            Some("默认建议使用“按住右 Alt 说话”；若无响应，可在权限页查看 hook 安装状态。")
+        );
     }
 
     #[cfg(target_os = "windows")]

@@ -5,6 +5,8 @@ import {
   modifiersFromKeyboardLikeEvent,
   primaryFromKeyboardLikeEvent,
 } from './ShortcutRecorder';
+// @ts-ignore This repo does not install Node type declarations, but the contract test runs under tsx.
+import { readFileSync } from 'node:fs';
 
 function assertEqual<T>(actual: T, expected: T, name: string) {
   if (actual !== expected) {
@@ -72,5 +74,22 @@ function assertDeepEqual(actual: unknown, expected: unknown, name: string) {
     modifierPrimaryFromCode(nativeRightAlt?.code ?? '', nativeRightAlt?.key ?? '', { isMac: false, isWindows: true }),
     'RightAlt',
     'Native Windows recorder event records RightAlt',
+  );
+}
+
+{
+  const source = readFileSync(new URL('./ShortcutRecorder.tsx', import.meta.url), 'utf8');
+  const listenerIndex = source.indexOf("listen<ShortcutRecorderNativeHotkeyEvent>('shortcut-recorder:key'");
+  const activationIndex = source.indexOf('void setShortcutRecordingActive(true);');
+
+  assertEqual(
+    source.includes('await setShortcutRecordingActive(true);'),
+    false,
+    'ShortcutRecorder must not enable native capture before React installs the native key listener',
+  );
+  assertEqual(
+    listenerIndex >= 0 && activationIndex > listenerIndex,
+    true,
+    'ShortcutRecorder enables native capture only after registering shortcut-recorder:key listener',
   );
 }

@@ -25,7 +25,10 @@ pub enum HotkeyEvent {
     Pressed,
     Released,
     Cancelled,
-    ShortcutRecorderKey { code: &'static str, pressed: bool },
+    ShortcutRecorderKey {
+        code: &'static str,
+        pressed: bool,
+    },
     /// Shift（或未来配置项指定的修饰键）按下边沿。可在录音过程中任何时刻产生；
     /// 上层据此切换到翻译输出管线。详见 issue #4。
     TranslationModifierPressed,
@@ -953,6 +956,9 @@ mod platform {
             if let Some(code) = shortcut_recorder_code_from_vk(vk_code) {
                 match message {
                     WM_KEYDOWN | WM_SYSKEYDOWN => {
+                        log::info!(
+                            "[hotkey] Windows shortcut recorder key code={code} pressed=true"
+                        );
                         send_or_log(
                             &ctx.tx,
                             HotkeyEvent::ShortcutRecorderKey {
@@ -962,6 +968,9 @@ mod platform {
                         );
                     }
                     WM_KEYUP | WM_SYSKEYUP => {
+                        log::info!(
+                            "[hotkey] Windows shortcut recorder key code={code} pressed=false"
+                        );
                         send_or_log(
                             &ctx.tx,
                             HotkeyEvent::ShortcutRecorderKey {

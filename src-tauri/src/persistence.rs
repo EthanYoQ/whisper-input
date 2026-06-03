@@ -22,12 +22,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::types::{
-    CorrectionRule, DictationSession, DictionaryEntry, HotkeyMode, HotkeyTrigger, UserPreferences,
-    VocabPresetStore,
-};
-use crate::right_alt_migration_core::{
-    should_mark_windows_right_alt_migration, should_repair_windows_right_alt_default_hold,
-    RIGHT_ALT_HOTKEY_MIGRATION_VERSION,
+    CorrectionRule, DictationSession, DictionaryEntry, UserPreferences, VocabPresetStore,
 };
 
 const HISTORY_CAP: usize = 200;
@@ -1243,7 +1238,7 @@ impl PreferencesStore {
         ensure_dir(&dir)?;
         migrate_low_risk_openless_data(&dir);
         let path = dir.join(PREFERENCES_FILE);
-        let mut prefs = if path.exists() {
+        let prefs = if path.exists() {
             read_or_default::<UserPreferences>(&path).unwrap_or_else(|e| {
                 log::warn!(
                     "[prefs] load {} failed, using defaults: {}",
@@ -1256,16 +1251,6 @@ impl PreferencesStore {
             UserPreferences::default()
         }
         .sanitize_product_visibility();
-        if repair_windows_right_alt_default_mode_once(&mut prefs) {
-            match serde_json::to_vec_pretty(&prefs) {
-                Ok(json) => {
-                    if let Err(err) = atomic_write(&path, &json) {
-                        log::warn!("[prefs] write RightAlt migration failed: {err}");
-                    }
-                }
-                Err(err) => log::warn!("[prefs] encode RightAlt migration failed: {err}"),
-            }
-        }
         Ok(Self {
             path,
             state: Mutex::new(prefs),
@@ -1283,37 +1268,6 @@ impl PreferencesStore {
         let mut guard = self.state.lock();
         *guard = prefs;
         Ok(())
-    }
-}
-
-fn repair_windows_right_alt_default_mode_once(prefs: &mut UserPreferences) -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        if !should_mark_windows_right_alt_migration(prefs.right_alt_hotkey_migration_version) {
-            return false;
-        }
-
-        if should_repair_windows_right_alt_default_hold(
-            prefs.right_alt_hotkey_migration_version,
-            prefs.hotkey.trigger == HotkeyTrigger::RightAlt,
-            prefs.hotkey.mode == HotkeyMode::Hold,
-            &prefs.dictation_hotkey.primary,
-            prefs.dictation_hotkey.modifiers.is_empty(),
-            prefs.custom_combo_hotkey.is_some(),
-        ) {
-            prefs.hotkey.mode = HotkeyMode::Toggle;
-            log::info!(
-                "[prefs] repaired legacy Windows RightAlt default mode from Hold to Toggle"
-            );
-        }
-        prefs.right_alt_hotkey_migration_version = RIGHT_ALT_HOTKEY_MIGRATION_VERSION;
-        true
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = prefs;
-        false
     }
 }
 
@@ -1774,15 +1728,11 @@ impl CredentialsVault {
 mod tests {
     use super::{
         chunk_json_payload, clean_credentials, list_vocab_presets, normalize_active_llm_provider,
-        repair_windows_right_alt_default_mode_once, save_vocab_presets,
-        validate_correction_rule_syntax, write_account, CredentialAccount, CredsAsrEntry,
-        CredsChunkManifest, CredsLlmEntry, CredsRoot, DictionaryStore,
-        RIGHT_ALT_HOTKEY_MIGRATION_VERSION, KEYRING_CHUNK_MAX_UTF16_UNITS,
-        LEGACY_ASR_PROVIDER_ID,
+        save_vocab_presets, validate_correction_rule_syntax, write_account, CredentialAccount,
+        CredsAsrEntry, CredsChunkManifest, CredsLlmEntry, CredsRoot, DictionaryStore,
+        KEYRING_CHUNK_MAX_UTF16_UNITS, LEGACY_ASR_PROVIDER_ID,
     };
-    use crate::types::{
-        DictionaryEntry, HotkeyMode, HotkeyTrigger, UserPreferences, VocabPreset, VocabPresetStore,
-    };
+    use crate::types::{DictionaryEntry, VocabPreset, VocabPresetStore};
     use std::fs;
     use std::path::PathBuf;
 
@@ -1806,35 +1756,6 @@ mod tests {
         let sanitized = super::sanitize_credentials(&root);
 
         assert_eq!(sanitized.active.asr, crate::product::DOUBAO_ASR_PROVIDER_ID);
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test]
-    fn right_alt_default_hold_mode_migration_is_one_shot() {
-        let mut prefs = UserPreferences {
-            hotkey: crate::types::HotkeyBinding {
-                trigger: HotkeyTrigger::RightAlt,
-                mode: HotkeyMode::Hold,
-                keys: None,
-            },
-            dictation_hotkey: crate::types::ShortcutBinding {
-                primary: "RightAlt".into(),
-                modifiers: vec![],
-            },
-            right_alt_hotkey_migration_version: 0,
-            ..Default::default()
-        };
-
-        assert!(repair_windows_right_alt_default_mode_once(&mut prefs));
-        assert_eq!(prefs.hotkey.mode, HotkeyMode::Toggle);
-        assert_eq!(
-            prefs.right_alt_hotkey_migration_version,
-            RIGHT_ALT_HOTKEY_MIGRATION_VERSION
-        );
-
-        prefs.hotkey.mode = HotkeyMode::Hold;
-        assert!(!repair_windows_right_alt_default_mode_once(&mut prefs));
-        assert_eq!(prefs.hotkey.mode, HotkeyMode::Hold);
     }
 
     #[test]

@@ -81,10 +81,7 @@ mod tests {
 
     #[test]
     fn right_alt_trigger_maps_to_physical_right_menu_key() {
-        assert_eq!(
-            trigger_to_vk_code(WindowsHotkeyTrigger::RightAlt),
-            VK_RMENU
-        );
+        assert_eq!(trigger_to_vk_code(WindowsHotkeyTrigger::RightAlt), VK_RMENU);
     }
 
     #[test]

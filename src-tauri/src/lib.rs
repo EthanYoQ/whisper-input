@@ -27,7 +27,6 @@ mod permissions;
 mod persistence;
 mod polish;
 mod product;
-mod right_alt_migration_core;
 #[cfg(test)]
 mod provider_latency_smoke;
 mod qa_hotkey;
