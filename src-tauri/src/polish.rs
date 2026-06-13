@@ -1916,10 +1916,100 @@ pub(crate) fn clean_polish_output(content: &str) -> String {
 
 pub(crate) fn normalize_polish_layout(mode: PolishMode, content: &str) -> String {
     let decimal_normalized = normalize_spoken_decimal_numbers(content);
+    if mode == PolishMode::Light {
+        return remove_light_mode_stray_fillers(&decimal_normalized);
+    }
     if !matches!(mode, PolishMode::Structured | PolishMode::Formal) {
         return decimal_normalized;
     }
     normalize_numbered_blocks(&decimal_normalized)
+}
+
+fn remove_light_mode_stray_fillers(content: &str) -> String {
+    let chars: Vec<char> = content.chars().collect();
+    let mut output = String::with_capacity(content.len());
+    let mut i = 0;
+
+    while i < chars.len() {
+        if let Some(end) = match_stray_filler(&chars, i, output.chars().last()) {
+            i = skip_filler_tail_punctuation(&chars, end);
+            continue;
+        }
+        output.push(chars[i]);
+        i += 1;
+    }
+
+    output.trim().to_string()
+}
+
+fn match_stray_filler(
+    chars: &[char],
+    start: usize,
+    previous_output: Option<char>,
+) -> Option<usize> {
+    if !is_filler_left_boundary(previous_output) {
+        return None;
+    }
+
+    let mut cursor = start;
+    let mut matched = false;
+    loop {
+        if chars.get(cursor) == Some(&'嗯') {
+            matched = true;
+            cursor += 1;
+            while chars.get(cursor) == Some(&'嗯') {
+                cursor += 1;
+            }
+        } else if matches!(chars.get(cursor), Some('呃' | '额' | '啊')) {
+            matched = true;
+            let ch = chars[cursor];
+            cursor += 1;
+            while chars.get(cursor) == Some(&ch) {
+                cursor += 1;
+            }
+        } else {
+            break;
+        }
+
+        while matches!(chars.get(cursor), Some(' ' | '\t' | '、')) {
+            cursor += 1;
+        }
+    }
+
+    if !matched || !is_filler_right_boundary(chars.get(cursor).copied()) {
+        return None;
+    }
+    Some(cursor)
+}
+
+fn skip_filler_tail_punctuation(chars: &[char], mut cursor: usize) -> usize {
+    while matches!(
+        chars.get(cursor),
+        Some(' ' | '\t' | '，' | ',' | '。' | '；' | ';' | '：' | ':')
+    ) {
+        cursor += 1;
+    }
+    cursor
+}
+
+fn is_filler_left_boundary(ch: Option<char>) -> bool {
+    match ch {
+        None => true,
+        Some(c) => {
+            c.is_whitespace()
+                || matches!(
+                    c,
+                    '，' | ',' | '。' | '！' | '!' | '？' | '?' | '；' | ';' | '：' | ':'
+                )
+        }
+    }
+}
+
+fn is_filler_right_boundary(ch: Option<char>) -> bool {
+    match ch {
+        None => true,
+        Some(c) => c.is_whitespace() || matches!(c, '，' | ',' | '。' | '；' | ';' | '：' | ':'),
+    }
 }
 
 fn normalize_spoken_decimal_numbers(content: &str) -> String {
@@ -3418,6 +3508,27 @@ mod tests {
 
         assert_eq!(normalize_polish_layout(PolishMode::Raw, text), text);
         assert_eq!(normalize_polish_layout(PolishMode::Light, text), text);
+    }
+
+    #[test]
+    fn light_layout_removes_stray_fillers_without_touching_mentioned_terms() {
+        let text = "嗯，首先你理解一下我的问题。呃，应该是 Pro 会员额度。";
+        assert_eq!(
+            normalize_polish_layout(PolishMode::Light, text),
+            "首先你理解一下我的问题。应该是 Pro 会员额度。"
+        );
+
+        let mentioned = "例如嗯、啊之类的语气词需要删除。";
+        assert_eq!(
+            normalize_polish_layout(PolishMode::Light, mentioned),
+            mentioned
+        );
+
+        let meaningful = "嗯？你确定吗？";
+        assert_eq!(
+            normalize_polish_layout(PolishMode::Light, meaningful),
+            meaningful
+        );
     }
 
     #[test]

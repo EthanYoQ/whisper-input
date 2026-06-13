@@ -237,6 +237,13 @@ assert(
     zhStyleModes.structured.sample.includes('2.1'),
   `structured sample must show hierarchical numbering, got: ${zhStyleModes.structured.sample}`,
 );
+for (const mode of ['light', 'structured'] as const) {
+  assert(
+    !zhStyleModes[mode].sample.includes('不是周二') &&
+      zhStyleModes[mode].sample.includes('周三下午两点'),
+    `${mode} sample should resolve spoken self-correction to the final value, got: ${zhStyleModes[mode].sample}`,
+  );
+}
 assert(
   zhStyleModes.formal.sample.includes('老板您好：') &&
     zhStyleModes.formal.sample.includes('谢谢。') &&
