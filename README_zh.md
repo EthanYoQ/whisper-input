@@ -15,9 +15,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/EthanYoQ/whisper-input/releases"><img src="https://img.shields.io/github/v/release/EthanYoQ/whisper-input?label=release" alt="Release" /></a>
-  <a href="https://github.com/EthanYoQ/whisper-input/blob/main/LICENSE"><img src="https://img.shields.io/github/license/EthanYoQ/whisper-input" alt="License" /></a>
-  <a href="https://github.com/EthanYoQ/whisper-input/stargazers"><img src="https://img.shields.io/github/stars/EthanYoQ/whisper-input?style=social" alt="GitHub stars" /></a>
+  <a href="https://github.com/EthanYoQ/whisper-input/releases"><img src="https://badgen.net/github/tag/EthanYoQ/whisper-input?label=release" alt="Release" /></a>
+  <a href="https://github.com/EthanYoQ/whisper-input/blob/main/LICENSE"><img src="https://badgen.net/badge/license/Apache-2.0/blue" alt="Apache License 2.0" /></a>
+  <a href="https://github.com/EthanYoQ/whisper-input/stargazers"><img src="https://badgen.net/github/stars/EthanYoQ/whisper-input" alt="GitHub stars" /></a>
 </p>
 
 ---
@@ -290,4 +290,4 @@ flowchart LR
 
 ## License
 
-MIT
+Apache License 2.0
