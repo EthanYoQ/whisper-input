@@ -11,7 +11,11 @@
 <h1 align="center">轻语输入 / Whisper Input</h1>
 
 <p align="center">
-  面向 Windows 职场用户的 AI 语音输入工具：把口语变成可发送、可汇报、可交接的文字。
+  面向 Windows 职场用户的 AI 语音输入工具：按全局快捷键说话，把中文语音转文字，去口头语并润色成结构化文本，插入当前光标。
+</p>
+
+<p align="center">
+  搜索意图：<strong>Windows 语音输入</strong>、<strong>快捷键语音转文字</strong>、<strong>按住说话自动输入</strong>、<strong>插入光标</strong>、<strong>去口头语润色</strong>、<strong>结构化文本</strong>。
 </p>
 
 <p align="center">
@@ -20,13 +24,17 @@
   <a href="https://github.com/EthanYoQ/whisper-input/stargazers"><img src="https://badgen.net/github/stars/EthanYoQ/whisper-input" alt="GitHub stars" /></a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/EthanYoQ/whisper-input/releases/latest">下载最新版 Windows 安装包</a>
+</p>
+
 ---
 
 ## 🎯 一句话说明
 
 轻语输入不是传统输入法，也不是会议记录软件。
 
-它只做一件事：**你按下快捷键说话，它把你的口语整理成自然、正式、结构清楚的文字，并插入到当前光标位置。**
+它只做一件事：**你按下快捷键说话，它把你的口语整理成自然、正式、结构清楚的文字，并插入到当前光标位置。** 如果直接插入失败，会自动复制到剪贴板兜底。
 
 适合这些场景：
 

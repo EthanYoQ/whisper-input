@@ -11,7 +11,11 @@
 <h1 align="center">Whisper Input / 轻语输入</h1>
 
 <p align="center">
-  An AI voice input tool for Windows professionals: turns spoken words into polished, structured text ready to send, report, or hand off.
+  Windows AI voice input: press a global hotkey, speak in Chinese, turn speech to text, polish spoken words, structure the result, and insert it at the current cursor position.
+</p>
+
+<p align="center">
+  中文搜索意图：<strong>Windows 语音输入</strong>、<strong>快捷键语音转文字</strong>、<strong>按住说话自动输入</strong>、<strong>插入光标</strong>、<strong>去口头语润色</strong>、<strong>结构化文本</strong>。
 </p>
 
 <p align="center">
@@ -20,13 +24,17 @@
   <a href="https://github.com/EthanYoQ/whisper-input/stargazers"><img src="https://badgen.net/github/stars/EthanYoQ/whisper-input" alt="GitHub stars" /></a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/EthanYoQ/whisper-input/releases/latest">Download latest Windows installer</a>
+</p>
+
 ---
 
 ## 🎯 At a Glance
 
 Whisper Input is not a traditional IME, nor a meeting transcription tool.
 
-It does one thing: **press a shortcut key, speak, and it turns your spoken words into natural, well-structured text at your cursor position.**
+It does one thing: **press a shortcut key, speak, and it turns your spoken words into natural, well-structured text at your cursor position.** If direct insertion fails, the result is copied to the clipboard as a fallback.
 
 Here are some typical scenarios:
 
