@@ -8,14 +8,18 @@
   <img src="./public/AppIcon.png" width="104" height="104" alt="Whisper Input Logo" />
 </p>
 
-<h1 align="center">Whisper Input / 轻语输入</h1>
+<h1 align="center">Whisper Input / Qingyu — OpenLess-based Windows Voice Typing</h1>
 
 <p align="center">
-  Windows AI voice input: press a global hotkey, speak in Chinese, turn speech to text, polish spoken words, structure the result, and insert it at the current cursor position.
+  An OpenLess-based Windows AI voice input tool for Chinese workplace writing: hold a global hotkey, speak naturally, turn speech to text, remove filler words, polish or structure the result, and insert it at the current cursor position.
 </p>
 
 <p align="center">
-  中文搜索意图：<strong>Windows 语音输入</strong>、<strong>快捷键语音转文字</strong>、<strong>按住说话自动输入</strong>、<strong>插入光标</strong>、<strong>去口头语润色</strong>、<strong>结构化文本</strong>。
+  Search intent: <strong>OpenLess alternative</strong>, <strong>Typeless alternative</strong>, <strong>typeless-alternative</strong>, <strong>Windows voice typing</strong>, <strong>AI voice dictation</strong>, <strong>Chinese speech-to-text</strong>, <strong>workplace dictation</strong>, <strong>Chinese-to-English voice input</strong>.
+</p>
+
+<p align="center">
+  中文搜索意图：<strong>OpenLess 改造版</strong>、<strong>Typeless 平替</strong>、<strong>开源 Typeless</strong>、<strong>Windows 语音输入</strong>、<strong>快捷键语音转文字</strong>、<strong>职场语音输入</strong>、<strong>中文转英文语音输入</strong>。
 </p>
 
 <p align="center">
@@ -35,6 +39,8 @@
 Whisper Input is not a traditional IME, nor a meeting transcription tool.
 
 It does one thing: **press a shortcut key, speak, and it turns your spoken words into natural, well-structured text at your cursor position.** If direct insertion fails, the result is copied to the clipboard as a fallback.
+
+This project is built upon [OpenLess](https://github.com/Open-Less/openless), but it is not an official OpenLess distribution and is not affiliated with Typeless. It explores a Windows-first, cloud-first, BYOK direction for people searching for an open-source Typeless-style voice typing workflow in Chinese workplace scenarios.
 
 Here are some typical scenarios:
 

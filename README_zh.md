@@ -8,14 +8,14 @@
   <img src="./public/AppIcon.png" width="104" height="104" alt="Whisper Input Logo" />
 </p>
 
-<h1 align="center">轻语输入 / Whisper Input</h1>
+<h1 align="center">轻语输入 / Whisper Input — OpenLess 改造版，Typeless 平替方向</h1>
 
 <p align="center">
-  面向 Windows 职场用户的 AI 语音输入工具：按全局快捷键说话，把中文语音转文字，去口头语并润色成结构化文本，插入当前光标。
+  基于 OpenLess 改造，面向 Windows 职场用户的中文 AI 语音输入工具：按全局快捷键说话，把中文语音转文字，去口头语并润色成结构化文本，插入当前光标。
 </p>
 
 <p align="center">
-  搜索意图：<strong>Windows 语音输入</strong>、<strong>快捷键语音转文字</strong>、<strong>按住说话自动输入</strong>、<strong>插入光标</strong>、<strong>去口头语润色</strong>、<strong>结构化文本</strong>。
+  搜索意图：<strong>OpenLess 改造版</strong>、<strong>OpenLess 中文版</strong>、<strong>Typeless 平替</strong>、<strong>开源 Typeless</strong>、<strong>typeless-alternative</strong>、<strong>Windows 语音输入</strong>、<strong>职场语音输入</strong>、<strong>中文转英文语音输入</strong>。
 </p>
 
 <p align="center">
@@ -35,6 +35,8 @@
 轻语输入不是传统输入法，也不是会议记录软件。
 
 它只做一件事：**你按下快捷键说话，它把你的口语整理成自然、正式、结构清楚的文字，并插入到当前光标位置。** 如果直接插入失败，会自动复制到剪贴板兜底。
+
+它基于 [OpenLess](https://github.com/Open-Less/openless) 改造，但不是 OpenLess 官方发行版，也不是 Typeless 官方产品。这里的 Typeless / Typeless 平替 / 开源 Typeless 只用于说明用户常见的检索意图：用开源、可自带 API Key 的方式实现类似“按住说话、松开得到润色文字”的工作流，并更聚焦中文职场表达。
 
 适合这些场景：
 
