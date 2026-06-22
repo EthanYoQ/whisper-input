@@ -1139,6 +1139,31 @@ fn show_qa_window_no_activate<R: tauri::Runtime>(window: &tauri::WebviewWindow<R
     true
 }
 
+pub(crate) fn position_capsule_near_cursor<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    translation_active: bool,
+) -> tauri::Result<()> {
+    let bounds = capsule_window_bounds(translation_active);
+    window.set_size(LogicalSize::new(bounds.width, bounds.height))?;
+
+    if let Ok(cursor_pos) = window.cursor_position() {
+        if let Some(monitor) = window.current_monitor()? {
+            let scale = monitor.scale_factor();
+            let logical_x = cursor_pos.x as f64 / scale;
+            let logical_y = cursor_pos.y as f64 / scale;
+
+            // Offset the capsule near the cursor (15px right, 25px below)
+            let x = logical_x + 15.0;
+            let y = logical_y + 25.0;
+
+            window.set_position(LogicalPosition::new(x, y))?;
+            return Ok(());
+        }
+    }
+
+    position_capsule_bottom_center(window, translation_active)
+}
+
 /// 把 capsule 窗口移到屏幕底部居中，与 Swift `CapsuleWindowController.repositionToBottomCenter` 同效。
 /// 留 80pt 给 macOS Dock；Windows 任务栏一般在底部 48pt 以内，整体也合适。
 pub(crate) fn position_capsule_bottom_center<R: tauri::Runtime>(

@@ -4654,7 +4654,7 @@ fn emit_capsule(
         // Windows 上 linger 的真实问题（截图选中 / 死区 / 拖拽卡顿）由 #140 加的
         // `hide_capsule_window_if_present()` Win32 hard-hide 在 visible=false 分支
         // 处理，不依赖把 Done/Cancelled/Error 打成 invisible。详见 PR #140 评论。
-        maybe_position_capsule_bottom_center(&inner_for_main, &window, translation);
+        maybe_position_capsule_near_cursor(&inner_for_main, &window, translation);
         if show_capsule && visible {
             if !show_capsule_window_no_activate(&app_for_main, &window) {
                 let _ = window.show();
@@ -4755,32 +4755,12 @@ fn update_atomic_max(target: &AtomicU64, value: u64) {
     }
 }
 
-fn maybe_position_capsule_bottom_center<R: tauri::Runtime>(
-    inner: &Arc<Inner>,
+fn maybe_position_capsule_near_cursor<R: tauri::Runtime>(
+    _inner: &Arc<Inner>,
     window: &tauri::WebviewWindow<R>,
     translation_active: bool,
 ) {
-    let Some(monitor) = window.current_monitor().ok().flatten() else {
-        return;
-    };
-    let next = CapsuleLayoutState {
-        translation_active,
-        monitor_x: monitor.position().x,
-        monitor_y: monitor.position().y,
-        monitor_width: monitor.size().width,
-        monitor_height: monitor.size().height,
-        scale_bits: monitor.scale_factor().to_bits(),
-    };
-    {
-        let last = inner.capsule_layout.lock();
-        if last.as_ref() == Some(&next) {
-            return;
-        }
-    }
-    if crate::position_capsule_bottom_center(window, translation_active).is_ok() {
-        let mut last = inner.capsule_layout.lock();
-        *last = Some(next);
-    }
+    let _ = crate::position_capsule_near_cursor(window, translation_active);
 }
 
 // ─────────────────────────── audio bridge ───────────────────────────
