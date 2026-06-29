@@ -176,7 +176,7 @@ export const zhCN = {
     historyLoadError: '历史读取失败',
     metricTotal: '累计字数',
     metricTotalTrend: '全部历史',
-    weekTitle: '近 7 天使用趋势 ⓘ',
+    weekTitle: '近 7 天使用趋势',
     weekRange7: '7 天',
     weekRange30: '30 天',
     weekRangeAll: '全部',

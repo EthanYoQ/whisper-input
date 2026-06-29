@@ -178,7 +178,7 @@ export const zhTW: typeof zhCN = {
     historyLoadError: '歷史讀取失敗',
     metricTotal: '累計字數',
     metricTotalTrend: '全部歷史',
-    weekTitle: '近 7 天使用趨勢 ⓘ',
+    weekTitle: '近 7 天使用趨勢',
     weekRange7: '7 天',
     weekRange30: '30 天',
     weekRangeAll: '全部',

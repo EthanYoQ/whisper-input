@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { Icon } from './Icon';
 
 export type OS = 'mac' | 'win' | 'linux';
 
@@ -125,13 +126,13 @@ function WinTitleBar({ title }: WinTitleBarProps) {
       </div>
       <div style={{ display: 'flex', pointerEvents: 'auto' }}>
         <WinTitleButton title={t('windowChrome.minimize')} action="minimize">
-          <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" strokeWidth="1" /></svg>
+          <Icon name="minus" size={12} strokeWidth={1.7} />
         </WinTitleButton>
         <WinTitleButton title={t('windowChrome.maximize')} action="toggleMaximize">
-          <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" strokeWidth="1" fill="none" /></svg>
+          <Icon name="maximize" size={12} strokeWidth={1.7} />
         </WinTitleButton>
         <WinTitleButton title={t('windowChrome.close')} action="close" tone="danger">
-          <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0L10 10M10 0L0 10" stroke="currentColor" strokeWidth="1" /></svg>
+          <Icon name="close" size={12} strokeWidth={1.7} />
         </WinTitleButton>
       </div>
     </div>

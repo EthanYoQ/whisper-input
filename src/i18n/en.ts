@@ -178,7 +178,7 @@ export const en: typeof zhCN = {
     historyLoadError: 'History load failed',
     metricTotal: 'Total characters',
     metricTotalTrend: 'All history',
-    weekTitle: 'Last 7 days trend ⓘ',
+    weekTitle: 'Last 7 days trend',
     weekRange7: '7 days',
     weekRange30: '30 days',
     weekRangeAll: 'All',

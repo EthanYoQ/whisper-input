@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Icon } from '../components/Icon';
 import { PreviewButton, PreviewCard, PreviewPageHeader } from '../components/preview/PreviewPrimitives';
 import {
   addVocab,
@@ -194,7 +195,7 @@ function VocabChip({ entry, pending, onRemove, onToggle }: VocabChipProps) {
         aria-label={t('vocab.removeAria')}
         className="wi-chip-remove"
       >
-        ×
+        <Icon name="x" size={12} strokeWidth={1.8} />
       </button>
     </span>
   );

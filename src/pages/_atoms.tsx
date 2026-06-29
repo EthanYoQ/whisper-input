@@ -1,6 +1,4 @@
 // _atoms.tsx — shared display atoms used across the page bodies.
-// Ported verbatim from design_handoff_openless/pages.jsx (PageHeader, Card,
-// Pill, Btn). Inline styles preserved 1:1.
 
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { Icon } from '../components/Icon';
@@ -19,8 +17,8 @@ export function PageHeader({ kicker, title, desc, right }: PageHeaderProps) {
         {kicker && (
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--ol-ink-4)', marginBottom: 8 }}>{kicker}</div>
         )}
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--ol-ink)' }}>{title}</h1>
-        {desc && <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--ol-ink-3)', maxWidth: 640, lineHeight: 1.55 }}>{desc}</p>}
+        <h1 style={{ margin: 0, fontSize: 28, lineHeight: 1.16, fontWeight: 720, letterSpacing: 0, color: 'var(--ol-ink)', textWrap: 'balance' }}>{title}</h1>
+        {desc && <p style={{ margin: '9px 0 0', fontSize: 13, color: 'var(--ol-ink-3)', maxWidth: 660, lineHeight: 1.6, textWrap: 'pretty' }}>{desc}</p>}
       </div>
       {right}
     </div>
@@ -40,13 +38,13 @@ export function Card({ children, style, padding = 18, glassy = false, className 
     <div
       className={className}
       style={{
-        background: glassy ? 'rgba(255,255,255,0.55)' : 'var(--ol-surface)',
+        background: glassy ? 'rgba(255,255,255,0.64)' : 'var(--ol-card-bg, var(--ol-surface))',
         backdropFilter: glassy ? 'blur(20px) saturate(160%)' : undefined,
         WebkitBackdropFilter: glassy ? 'blur(20px) saturate(160%)' : undefined,
-        border: '0.5px solid var(--ol-line)',
-        borderRadius: 'var(--ol-r-lg)',
+        border: '0 solid transparent',
+        borderRadius: '18px',
         padding,
-        boxShadow: 'var(--ol-shadow-sm)',
+        boxShadow: 'var(--ol-card-shadow, var(--ol-shadow-sm))',
         ...style,
       }}
     >
@@ -170,11 +168,11 @@ export function Collapsible({ title, desc, defaultOpen = false, embedded = false
   return (
     <div
       style={{
-        borderBottom: embedded ? '0.5px solid var(--ol-line)' : undefined,
-        border: embedded ? undefined : '0.5px solid var(--ol-line)',
-        borderRadius: embedded ? 0 : 'var(--ol-r-lg)',
-        background: embedded ? 'transparent' : 'var(--ol-surface)',
-        boxShadow: embedded ? 'none' : 'var(--ol-shadow-sm)',
+        borderBottom: embedded ? '1px solid rgba(148,163,184,0.18)' : undefined,
+        border: embedded ? undefined : '0 solid transparent',
+        borderRadius: embedded ? 0 : 18,
+        background: embedded ? 'transparent' : 'var(--ol-card-bg, var(--ol-surface))',
+        boxShadow: embedded ? 'none' : 'var(--ol-card-shadow, var(--ol-shadow-sm))',
         overflow: 'hidden',
         // 父级 flex column 带 minHeight:0 + overflow:auto 时，所有 flex 子项默认
         // shrink:1，会把 header 按钮也压成一条线。锁住不压缩，溢出走父容器滚动。

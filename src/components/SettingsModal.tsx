@@ -165,7 +165,7 @@ export function SettingsModal({ os: _os, onClose, initialSettingsSection }: Sett
             <Icon name="close" size={14} />
           </button>
 
-          <h2 style={{ margin: 0, padding: '22px 28px 8px', fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', flexShrink: 0 }}>{t(`modal.sections.${section}`)}</h2>
+          <h2 style={{ margin: 0, padding: '22px 28px 8px', fontSize: 22, fontWeight: 650, letterSpacing: 0, flexShrink: 0, textWrap: 'balance' }}>{t(`modal.sections.${section}`)}</h2>
 
           {section === 'settings' ? (
             <div style={{ flex: 1, minHeight: 0, padding: '10px 28px 28px', display: 'flex', flexDirection: 'column' }}>

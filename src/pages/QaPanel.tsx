@@ -16,6 +16,7 @@ import { getSettings, isTauri, qaWindowDismiss, qaWindowPin } from '../lib/ipc';
 import type { QaChatMessage, QaStatePayload, UserPreferences } from '../lib/types';
 import { getHotkeyBindingLabel } from '../lib/hotkey';
 import { renderQaMarkdown, renderQaPlainText } from '../lib/qaMarkdown';
+import { Icon } from '../components/Icon';
 
 const SELECTION_PREVIEW_MAX = 60;
 
@@ -265,25 +266,10 @@ function Toolbar({ pinned, onTogglePin, onClose }: ToolbarProps) {
         active={pinned}
         onClick={onTogglePin}
       >
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-          <path
-            d="M10.5 2L14 5.5L11.5 8L9.5 7L7 9.5L6.5 9L4 11.5L3 13L4.5 11.5L7 9L6.5 8.5L9 6L8 4L10.5 2Z"
-            stroke="currentColor"
-            strokeWidth="1.2"
-            strokeLinejoin="round"
-            fill={pinned ? 'currentColor' : 'none'}
-          />
-        </svg>
+        <Icon name="pin" size={13} strokeWidth={1.7} fill={pinned ? 'currentColor' : 'none'} />
       </IconBtn>
       <IconBtn label={t('qa.closeTooltip')} onClick={onClose}>
-        <svg width="11" height="11" viewBox="0 0 11 11">
-          <path
-            d="M1.5 1.5l8 8M9.5 1.5l-8 8"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          />
-        </svg>
+        <Icon name="close" size={12} strokeWidth={1.8} />
       </IconBtn>
     </div>
   );

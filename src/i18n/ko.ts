@@ -161,7 +161,7 @@ export const ko: typeof zhCN = {
     historyLoadError: '기록 로드 실패',
     metricTotal: '누적 글자 수',
     metricTotalTrend: '전체 기록',
-    weekTitle: '최근 7일 사용 추세 ⓘ',
+    weekTitle: '최근 7일 사용 추세',
     weekRange7: '7일',
     weekRange30: '30일',
     weekRangeAll: '전체',

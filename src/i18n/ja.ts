@@ -161,7 +161,7 @@ export const ja: typeof zhCN = {
     historyLoadError: '履歴の読み込みに失敗',
     metricTotal: '累計文字数',
     metricTotalTrend: '全履歴',
-    weekTitle: '直近 7 日の利用トレンド ⓘ',
+    weekTitle: '直近 7 日の利用トレンド',
     weekRange7: '7 日',
     weekRange30: '30 日',
     weekRangeAll: 'すべて',

@@ -201,7 +201,8 @@ function CommandBar({
   return (
     <div className="wi-commandbar">
       <button className="wi-btn" type="button" onClick={onOpenHelp}>
-        ⓘ {t('shell.commandBar.help')}
+        <Icon name="help" size={14} strokeWidth={1.75} />
+        {t('shell.commandBar.help')}
       </button>
       <button
         className="wi-btn"

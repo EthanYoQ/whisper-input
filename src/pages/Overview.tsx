@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Icon } from '../components/Icon';
 import { PreviewButton, PreviewCard, PreviewPageHeader, PreviewPill } from '../components/preview/PreviewPrimitives';
 import { detectOS } from '../components/WindowChrome';
 import { formatComboLabel } from '../lib/hotkey';
@@ -134,8 +135,8 @@ export function Overview({ onOpenHistory, onOpenSettings }: OverviewProps) {
   const llmLogoSrc = providerLogoSrc(llmProviderId);
 
   return (
-    <>
-      <PreviewPageHeader title={t('overview.title')} desc={t('overview.desc')} />
+    <div className="wi-overview-page">
+      <PreviewPageHeader className="wi-overview-page-head" title={t('overview.title')} desc={t('overview.desc')} />
 
       <div className="wi-model-grid">
         <ProviderCard
@@ -157,16 +158,19 @@ export function Overview({ onOpenHistory, onOpenSettings }: OverviewProps) {
       </div>
 
       <div className="wi-metric-grid">
-        <Metric iconLabel="T" label={t('overview.metricChars')} value={historyError ? '—' : metrics.charsToday.toLocaleString()} trend={historyError ? t('overview.historyLoadError') : t('overview.metricSegments', { count: metrics.segmentsToday })} />
-        <Metric iconLabel="◷" label={t('overview.metricDuration')} value={historyError ? '—' : formatVoiceInputDuration(metrics.totalDurationMs, t)} trend={historyError ? t('overview.historyLoadError') : t('overview.metricTotalTrend')} accent />
-        <Metric iconLabel="〽" label={t('overview.metricAvg')} value={historyError ? '—' : formatDuration(metrics.avgLatencyMs, t)} trend={historyError ? t('overview.historyLoadError') : metrics.segmentsToday > 0 ? t('overview.metricAvgTrend') : t('overview.metricNoData')} tone="purple" />
-        <Metric iconLabel="▤" label={t('overview.metricTotal')} value={historyError ? '—' : metrics.totalChars.toLocaleString()} trend={historyError ? t('overview.historyLoadError') : t('overview.metricTotalTrend')} />
+        <Metric iconName="hash" label={t('overview.metricChars')} value={historyError ? '—' : metrics.charsToday.toLocaleString()} trend={historyError ? t('overview.historyLoadError') : t('overview.metricSegments', { count: metrics.segmentsToday })} />
+        <Metric iconName="mic" label={t('overview.metricDuration')} value={historyError ? '—' : formatVoiceInputDuration(metrics.totalDurationMs, t)} trend={historyError ? t('overview.historyLoadError') : t('overview.metricTotalTrend')} accent />
+        <Metric iconName="clock" label={t('overview.metricAvg')} value={historyError ? '—' : formatDuration(metrics.avgLatencyMs, t)} trend={historyError ? t('overview.historyLoadError') : metrics.segmentsToday > 0 ? t('overview.metricAvgTrend') : t('overview.metricNoData')} tone="purple" />
+        <Metric iconName="doc" label={t('overview.metricTotal')} value={historyError ? '—' : metrics.totalChars.toLocaleString()} trend={historyError ? t('overview.historyLoadError') : t('overview.metricTotalTrend')} />
       </div>
 
       <div className="wi-overview-bottom">
         <PreviewCard className="wi-week-card">
           <div className="wi-overview-card-head">
-            <span>{t('overview.weekTitle')}</span>
+            <span className="wi-overview-card-title">
+              {t('overview.weekTitle')}
+              <Icon name="help" size={16} strokeWidth={1.9} />
+            </span>
             <span className="wi-overview-card-unit">{t('overview.weekUnit')}</span>
           </div>
           {historyError ? (
@@ -213,7 +217,7 @@ export function Overview({ onOpenHistory, onOpenSettings }: OverviewProps) {
           </div>
         </PreviewCard>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -261,7 +265,7 @@ function ProviderCard({ logoSrc, kind, name, subname, status, onOpenSettings }: 
 }
 
 interface MetricProps {
-  iconLabel: string;
+  iconName: string;
   label: string;
   value: string;
   trend: string;
@@ -269,11 +273,11 @@ interface MetricProps {
   tone?: 'blue' | 'purple';
 }
 
-function Metric({ iconLabel, label, value, trend, accent, tone = 'blue' }: MetricProps) {
+function Metric({ iconName, label, value, trend, accent, tone = 'blue' }: MetricProps) {
   return (
     <PreviewCard className="wi-metric-card">
       <div className={`wi-metric-icon ${accent ? 'wi-metric-icon-accent' : ''} ${tone === 'purple' ? 'wi-metric-icon-purple' : ''}`}>
-        {iconLabel}
+        <Icon name={iconName} size={22} strokeWidth={1.75} />
       </div>
       <div className="wi-metric-copy">
         <span>{label}</span>

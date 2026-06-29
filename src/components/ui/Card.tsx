@@ -13,13 +13,13 @@ export function Card({ children, style, padding = 18, glassy = false, className 
     <section
       className={['ol-card', className].filter(Boolean).join(' ')}
       style={{
-        background: glassy ? 'rgba(255,255,255,0.55)' : 'var(--ol-surface)',
+        background: glassy ? 'rgba(255,255,255,0.64)' : 'var(--ol-card-bg, var(--ol-surface))',
         backdropFilter: glassy ? 'blur(20px) saturate(160%)' : undefined,
         WebkitBackdropFilter: glassy ? 'blur(20px) saturate(160%)' : undefined,
-        border: '0.5px solid var(--ol-line)',
-        borderRadius: 'var(--ol-r-lg)',
+        border: '0 solid transparent',
+        borderRadius: 18,
         padding,
-        boxShadow: 'var(--ol-shadow-sm)',
+        boxShadow: 'var(--ol-card-shadow, var(--ol-shadow-sm))',
         ...style,
       }}
     >

@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Icon } from '../components/Icon';
 import { getSettings, setDefaultPolishMode, setStyleEnabled, setSettings } from '../lib/ipc';
 import type { PolishMode, UserPreferences } from '../lib/types';
 import {
@@ -245,9 +246,7 @@ export function Style() {
                       aria-label={t('style.ariaSetDefault')}
                     >
                       {isDefault && (
-                        <svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true">
-                          <path d="M1.5 4.5l2.5 2.5 4-5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+                        <Icon name="check" size={10} strokeWidth={2} />
                       )}
                     </button>
                     <button

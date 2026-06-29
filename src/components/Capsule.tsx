@@ -6,6 +6,7 @@ import {
   getCapsuleMessageLayout,
   getCapsulePillMetrics,
 } from '../lib/capsuleLayout';
+import { Icon } from './Icon';
 import { invokeOrMock, isTauri } from '../lib/ipc';
 import type { CapsulePayload, CapsuleState } from '../lib/types';
 
@@ -127,15 +128,7 @@ function CircleButton({ variant, enabled, onClick }: CircleButtonProps) {
         transition: 'opacity 0.18s var(--ol-motion-soft), background 0.16s var(--ol-motion-quick), transform 0.12s var(--ol-motion-quick)',
       }}
     >
-      {isCancel ? (
-        <svg width="11" height="11" viewBox="0 0 11 11">
-          <path d="M1.5 1.5l8 8M9.5 1.5l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
-      ) : (
-        <svg width="13" height="13" viewBox="0 0 13 13">
-          <path d="M2 6.5l3.2 3.5L11 3.5" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )}
+      <Icon name={isCancel ? 'close' : 'check'} size={isCancel ? 12 : 14} strokeWidth={1.8} />
     </button>
   );
 }
