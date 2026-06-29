@@ -1,6 +1,6 @@
 <div align="center">
 
-**English** | [中文](README_zh.md)
+[English](README.md) | **中文**
 
 </div>
 
@@ -8,18 +8,14 @@
   <img src="./public/AppIcon.png" width="104" height="104" alt="Whisper Input Logo" />
 </p>
 
-<h1 align="center">Whisper Input / Qingyu — OpenLess-based Windows Voice Typing</h1>
+<h1 align="center">轻语输入 / Whisper Input — OpenLess 改造版，Typeless 平替方向</h1>
 
 <p align="center">
-  An OpenLess-based Windows AI voice input tool for Chinese workplace writing: hold a global hotkey, speak naturally, turn speech to text, remove filler words, polish or structure the result, and insert it at the current cursor position.
+  基于 OpenLess 改造，面向 Windows 职场用户的中文 AI 语音输入工具：按全局快捷键说话，把中文语音转文字，去口头语并润色成结构化文本，插入当前光标。
 </p>
 
 <p align="center">
-  Search intent: <strong>OpenLess alternative</strong>, <strong>Typeless alternative</strong>, <strong>typeless-alternative</strong>, <strong>Windows voice typing</strong>, <strong>AI voice dictation</strong>, <strong>Chinese speech-to-text</strong>, <strong>workplace dictation</strong>, <strong>Chinese-to-English voice input</strong>.
-</p>
-
-<p align="center">
-  中文搜索意图：<strong>OpenLess 改造版</strong>、<strong>Typeless 平替</strong>、<strong>开源 Typeless</strong>、<strong>Windows 语音输入</strong>、<strong>快捷键语音转文字</strong>、<strong>职场语音输入</strong>、<strong>中文转英文语音输入</strong>。
+  搜索意图：<strong>OpenLess 改造版</strong>、<strong>OpenLess 中文版</strong>、<strong>Typeless 平替</strong>、<strong>开源 Typeless</strong>、<strong>typeless-alternative</strong>、<strong>Windows 语音输入</strong>、<strong>职场语音输入</strong>、<strong>中文转英文语音输入</strong>。
 </p>
 
 <p align="center">
@@ -29,279 +25,280 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/EthanYoQ/whisper-input/releases/latest">Download latest Windows installer</a>
+  <a href="https://github.com/EthanYoQ/whisper-input/releases/latest">下载最新版 Windows 安装包</a>
 </p>
 
 ---
 
-## 🎯 At a Glance
+## 🎯 一句话说明
 
-Whisper Input is not a traditional IME, nor a meeting transcription tool.
+轻语输入不是传统输入法，也不是会议记录软件。
 
-It does one thing: **press a shortcut key, speak, and it turns your spoken words into natural, well-structured text at your cursor position.** If direct insertion fails, the result is copied to the clipboard as a fallback.
+它只做一件事：**你按下快捷键说话，它把你的口语整理成自然、正式、结构清楚的文字，并插入到当前光标位置。** 如果直接插入失败，会自动复制到剪贴板兜底。
 
-This project is built upon [OpenLess](https://github.com/Open-Less/openless), but it is not an official OpenLess distribution and is not affiliated with Typeless. It explores a Windows-first, cloud-first, BYOK direction for people searching for an open-source Typeless-style voice typing workflow in Chinese workplace scenarios.
+它基于 [OpenLess](https://github.com/Open-Less/openless) 改造，但不是 OpenLess 官方发行版，也不是 Typeless 官方产品。这里的 Typeless / Typeless 平替 / 开源 Typeless 只用于说明用户常见的检索意图：用开源、可自带 API Key 的方式实现类似“按住说话、松开得到润色文字”的工作流，并更聚焦中文职场表达。
 
-Here are some typical scenarios:
+适合这些场景：
 
-| Scenario | What you say | What Whisper Input produces |
+| 场景 | 你可以直接说 | 轻语输入帮你变成 |
 | --- | --- | --- |
-| 💬 Everyday chat | "Just handle this requirement like this for now, I will fill in the details tomorrow" | Clear, natural chat text with fewer filler words |
-| 🧑‍💼 Reporting to your boss | "Boss, there are three meetings this week, which one works for you?" | A formal request / meeting invitation |
-| 🧱 Task breakdown | "First push the code, second update the README, third publish the installer" | `1.`, `1.1`, `2.` structured text |
-| 🌐 English output | Dictate email content in Chinese | English email / Issue / work document |
-| 🔢 Number formatting | "Three yuan twenty-eight, tomorrow at two in the afternoon" | `3.28 yuan`, `Tomorrow 14:00` |
+| 💬 日常沟通 | "这个需求今天先这样处理，明天我再补一下细节" | 清楚、自然、少口头语的聊天文本 |
+| 🧑‍💼 给老板汇报 | "老板这周有三个会，您看哪个方便参加" | 正式请示 / 会议邀请 |
+| 🧱 任务拆解 | "第一把代码推上去，第二改 README，第三发安装包" | `1.`、`1.1`、`2.` 的结构化文本 |
+| 🌐 英文输出 | 中文口述英文邮件内容 | 英文邮件 / Issue / 工作说明 |
+| 🔢 数字格式化 | "三块二毛八，明天下午两点" | `3.28 元`、`明天下午 14:00` |
 
 ---
 
-## 🧭 How It Works
+## 🧭 它怎么工作
 
 ```mermaid
 flowchart LR
-  A["⌨️ Global Shortcut"] --> B["🎙️ Start Recording"]
-  B --> C["☁️ Cloud Real-time ASR"]
-  C --> D["✨ LLM Refinement / Polish"]
-  D --> E["📍 Insert at Cursor"]
-  E --> F{"Insertion Successful?"}
-  F -->|Yes| G["✅ Done"]
-  F -->|No| H["📋 Copy to Clipboard"]
-  H --> I["🕘 Save to History"]
+  A["⌨️ 全局快捷键"] --> B["🎙️ 开始录音"]
+  B --> C["☁️ 云端实时 ASR"]
+  C --> D["✨ LLM 整理 / 润色"]
+  D --> E["📍 插入当前光标"]
+  E --> F{"插入成功？"}
+  F -->|是| G["✅ 完成"]
+  F -->|否| H["📋 复制到剪贴板"]
+  H --> I["🕘 保存历史记录"]
 ```
 
-No need to switch input methods, open a chat window, or copy and paste manually.  
-Wherever your cursor is, the transcribed text appears there; if insertion fails, it is automatically copied to the clipboard as a fallback.
+你不需要切换输入法，不需要打开聊天窗口，也不需要手动复制粘贴。  
+光标在哪里，说完的文字就尽量出现在那里；如果插入失败，会自动复制到剪贴板兜底。
 
 ---
 
-## ✨ Core Capabilities
+## ✨ 核心能力
 
-| Icon | Capability | Problem It Solves |
+| 图标 | 能力 | 解决的问题 |
 | --- | --- | --- |
-| 🎙️ | Chinese voice input | Designed for real work scenarios—primarily Chinese with occasional English terms |
-| ⚡ | Low-latency pipeline | Recognizes, polishes, and inserts as quickly as possible after recording ends |
-| 🧹 | Light polish | Removes "uh", "um", "like", filler words, repetitions, and obvious speech errors |
-| 🧱 | Clear structure | Organizes multiple points from spoken text into hierarchical numbering |
-| 🧑‍💼 | Formal expression | Converts to emails, requests, feedback, handoff documents, and other formal text |
-| 🌐 | Chinese to English | Speak in Chinese, get English work text as output |
-| 🔢 | Format normalization | Automatically formats currency, time, numbers, and corrects spacing and punctuation |
-| 📚 | User dictionary | Preserves names, company names, product names, and technical terms |
-| 🕘 | History | Local review, copy, and delete recent inputs |
-| 📋 | Clipboard fallback | Ensures you get the result even if insertion into the input field fails |
+| 🎙️ | 中文语音输入 | 适合中文为主、夹杂英文术语的真实工作输入 |
+| ⚡ | 低延迟链路 | 录音结束后尽快识别、润色、插入 |
+| 🧹 | 轻度润色 | 去掉"呃、那个、然后"、重复词和明显口误 |
+| 🧱 | 清晰结构 | 把口语里的多个点整理成层级编号 |
+| 🧑‍💼 | 正式表达 | 转成邮件、请示、反馈、交接文档等正式文本 |
+| 🌐 | 中文转英文 | 用中文说意思，直接输出英文工作文本 |
+| 🔢 | 格式规范 | 自动整理金额、时间、数字、中英文空格和标点 |
+| 📚 | 用户词典 | 保留人名、公司名、产品名、专业术语 |
+| 🕘 | 历史记录 | 本地回看、复制、删除最近输入 |
+| 📋 | 剪贴板兜底 | 输入框插入失败时仍能拿到结果 |
 
 ---
 
-## 🧩 Four Output Styles
+## 🧩 四种输出风格
 
 ```mermaid
 flowchart TB
-  A["The same spoken text"] --> B["📝 Original"]
-  A --> C["🧹 Light Polish"]
-  A --> D["🧱 Clear Structure"]
-  A --> E["🧑‍💼 Formal"]
-  B --> B1["Keeps original wording, only adds sentence breaks and punctuation"]
-  C --> C1["Removes filler words and repetitions, maintains original order"]
-  D --> D1["Organizes into 1 / 1.1 / 2 hierarchical structure"]
-  E --> E1["Converts to formal email, request, feedback, or work document"]
+  A["同一段口语"] --> B["📝 原文"]
+  A --> C["🧹 轻度润色"]
+  A --> D["🧱 清晰结构"]
+  A --> E["🧑‍💼 正式表达"]
+  B --> B1["保留原始表达，只做断句和标点"]
+  C --> C1["去口头语、重复词，保持原顺序"]
+  D --> D1["整理成 1 / 1.1 / 2 的层级结构"]
+  E --> E1["转成正式邮件、请示、反馈或工作说明"]
 ```
 
-### Original Dictation
+### 原始口述
 
 ```text
-Hey boss about that project acceptance I was wrong earlier it is not Tuesday it is Wednesday at two in the afternoon and also please check the contract and payment milestones and the testing part needs some changes too.
+老板那个项目验收我刚才说错了不是周二是周三下午两点，然后麻烦你看一下合同和付款节点，还有测试这个地方要改一下。
 ```
 
-### 📝 Original
+### 📝 原文
 
 ```text
-Hey boss, about the project acceptance—I was wrong earlier, it is not Tuesday, it is Wednesday at two in the afternoon. Also, please check the contract and payment milestones, and the testing part needs some changes too.
+老板，项目验收我刚才说错了，不是周二，是周三下午两点。然后麻烦你看一下合同和付款节点，还有测试这个地方要改一下。
 ```
 
-### 🧹 Light Polish
+### 🧹 轻度润色
 
 ```text
-Boss, regarding the project acceptance—I was wrong earlier. It is not Tuesday, but Wednesday at two in the afternoon. Please check the contract and payment milestones. The testing part also needs some changes.
+老板，项目验收时间我刚才说错了，不是周二，是周三下午两点。麻烦你看一下合同和付款节点，还有测试这个地方要改一下。
 ```
 
-### 🧱 Clear Structure
+### 🧱 清晰结构
 
 ```text
-Boss, regarding the project acceptance, the following items need to be adjusted:
+老板，项目验收需要调整以下事项：
 
-1. Time Correction
-1.1 The project acceptance is not on Tuesday, but on Wednesday at 2:00 PM.
+1. 时间更正
+1.1 项目验收时间不是周二，而是周三下午两点。
 
-2. Items Requiring Confirmation
-2.1 Please review the contract and payment milestones.
-2.2 The testing section needs adjustments.
+2. 待确认事项
+2.1 请查看合同和付款节点。
+2.2 测试部分需要调整。
 ```
 
-### 🧑‍💼 Formal
+### 🧑‍💼 正式表达
 
 ```text
-Dear Boss,
+老板您好：
 
-Regarding the project acceptance, I would like to update you on the following:
+关于项目验收事项，现同步如下：
 
-1. Time Correction
-The project acceptance date was previously stated incorrectly. It has been corrected to Wednesday at 2:00 PM.
+1. 验收时间更正
+项目验收时间此前表述有误，现更正为周三下午两点。
 
-2. Items Requiring Confirmation
-Please review the contract and payment milestones. Additionally, the testing section requires further adjustments.
+2. 待确认事项
+烦请您查看合同及付款节点；此外，测试部分还需要进一步调整。
 
-Thank you.
+谢谢。
 ```
 
 ---
 
-## 🧑‍💼 Formal Expression Example: Meeting Invitation
+## 🧑‍💼 正式表达示例：会议邀请
 
-You can dictate naturally, just as you would speak:
-
-```text
-Hello Director Li, there are three meetings this week: tomorrow is the Jiangsu Provincial Annual Conference, Thursday is the Chang'an Studies Forum, and Friday is the Factory Recruitment Fair. The locations are Jinan, Tai'an, and Xinjiang respectively. Which one would be convenient for you to attend? I would like to invite you to one of the meetings. Thank you.
-```
-
-The Formal mode would produce output more like this:
+你可以像平时说话一样口述：
 
 ```text
-Dear Director Li,
-
-I would like to request your attendance at one of this week's meetings as follows.
-
-1. Meeting Schedule
-1.1 Jiangsu Provincial Annual Conference: Tomorrow, in Jinan.
-1.2 Chang'an Studies Forum: Thursday, in Tai'an.
-1.3 Factory Recruitment Fair: Friday, in Xinjiang.
-
-2. Request
-We sincerely invite you to attend and provide guidance at one of these meetings. Please let us know which meeting fits your schedule this week.
-
-Thank you.
+李部长您好，本周有三个会议，分别是明天的江苏省年会、周四的长安学论坛和周五的厂招会。地点分别为济南、泰安和新疆。请问您哪个时间有空？我邀请您参加其中一个会议。谢谢。
 ```
 
-It will not fabricate background information or expand on facts you did not mention. The focus is on organizing what you have already said into a format more suitable for professional communication.
+正式表达模式会更偏向这样的输出：
+
+```text
+李部长您好：
+
+关于邀请您出席本周会议的请示如下。
+
+1. 会议安排
+1.1 江苏省年会：时间为明天，地点为济南。
+1.2 长安学论坛：时间为周四，地点为泰安。
+1.3 厂招会：时间为周五，地点为新疆。
+
+2. 拟请事项
+拟诚邀您择一场会议出席指导。烦请您结合本周时间安排，告知方便参加的会议。
+
+谢谢。
+```
+
+它不会替你编造背景，也不会扩写没有说过的事实；重点是把你已经说出的内容整理成更适合职场沟通的格式。
 
 ---
 
-## 🌐 Speak Chinese, Output English
+## 🌐 中文说话，英文输出
 
 ```mermaid
 flowchart LR
-  A["🗣️ Chinese Dictation"] --> B["🧠 Understand Intent"]
-  B --> C["🌐 English Expression"]
-  C --> D["📍 Insert into Email / Issue / Document"]
+  A["🗣️ 中文口述"] --> B["🧠 理解原意"]
+  B --> C["🌐 英文表达"]
+  C --> D["📍 插入邮件 / Issue / 文档"]
 ```
 
-You say:
+你说：
 
 ```text
-Help me write something in English saying we have completed this update. The main fix was for the issue where long voice input text would get truncated, and we also improved the Formal expression mode.
+帮我写一段英文，说我们已经完成了这次更新，主要修复了语音长文本截断的问题，并且优化了正式表达模式。
 ```
 
-Output:
+输出：
 
 ```text
 We have completed this update. The main changes include fixing the issue where long voice input could be truncated, and improving the Formal style so that spoken content is converted into a more structured and professional format.
 ```
 
-No need to think in English while typing, or write Chinese first and then copy it into a translation tool.
+不用边想英文边打字，也不用把中文先写出来再复制到翻译工具。
 
 ---
 
-## 🔐 Data & Privacy
+## 🔐 数据与隐私
 
-Whisper Input is a cloud-first product, not an offline ASR tool. You need to configure your own cloud ASR and LLM API keys.
+轻语输入是 cloud-first 产品，不是离线 ASR 工具。你需要配置自己的云端 ASR 和 LLM API Key。
 
 ```mermaid
 flowchart TB
-  A["🎙️ Your Recording"] --> B["☁️ Your Configured ASR Service"]
-  B --> C["📝 ASR Text"]
-  C --> D["☁️ Your Configured LLM Service"]
-  D --> E["✨ Polished Text"]
-  E --> F["💻 Current App Input Field"]
-  E --> G["🕘 Local History"]
-  H["📚 User Dictionary"] --> D
-  I["🔑 API Key Config"] --> B
+  A["🎙️ 你的录音"] --> B["☁️ 你配置的 ASR 服务商"]
+  B --> C["📝 ASR 文本"]
+  C --> D["☁️ 你配置的 LLM 服务商"]
+  D --> E["✨ 整理后的文字"]
+  E --> F["💻 当前应用输入框"]
+  E --> G["🕘 本地历史记录"]
+  H["📚 用户词典"] --> D
+  I["🔑 API Key 配置"] --> B
   I --> D
 ```
 
-| Data | Default Location / Destination |
+| 数据 | 默认位置 / 去向 |
 | --- | --- |
-| 🎙️ Audio Recording | Sent to your configured cloud ASR service |
-| 📝 ASR Text | Sent to your configured LLM service |
-| 🕘 History | Saved locally by default |
-| 📚 User Dictionary | Saved locally by default |
-| 🔑 API Key | Stored in local config, can be cleared |
+| 🎙️ 录音音频 | 发送到你配置的云端 ASR 服务 |
+| 📝 ASR 文本 | 发送到你配置的 LLM 服务 |
+| 🕘 历史记录 | 默认保存在本机 |
+| 📚 用户词典 | 默认保存在本机 |
+| 🔑 API Key | 保存在本机配置中，可清空 |
 
-You can clear history, dictionary, and API configuration from the settings.
+你可以在设置中清空历史记录、词典和 API 配置。
 
 ---
 
-## ⚙️ Recommended Configuration
+## ⚙️ 推荐配置
 
-| Type | Recommendation | Notes |
+| 类型 | 推荐选择 | 说明 |
 | --- | --- | --- |
-| 🎙️ Default ASR | Qwen Real-time ASR | Better overall Chinese performance and lower latency after stopping speech |
-| 🎙️ Backup ASR | Doubao Streaming Speech Recognition 2.0 | Can serve as a backup pipeline |
-| ✨ Default LLM | Qwen / Gemini / Doubao | Choose based on region, cost, and availability |
-| ⚡ Low-cost mode | Lightweight LLM | Suitable for high-frequency daily input |
+| 🎙️ 默认 ASR | 千问实时 ASR | 中文整体表现和停止说话后的延迟更适合默认主线 |
+| 🎙️ 备用 ASR | 豆包流式语音识别 2.0 | 可作为备用链路 |
+| ✨ 默认 LLM | 千问 / Gemini / 豆包 | 按地区、成本和可用性选择 |
+| ⚡ 低成本模式 | 轻量 LLM | 适合高频日常输入 |
 
-The settings interface includes built-in common models and API endpoints. Regular users just need to select a service provider and enter their API key.
+设置界面会内置常用模型和调用路径。普通用户只需要选择服务商并填写 API Key。
 
 ---
 
-## 💰 Why It's Low Cost
+## 💰 成本为什么低
 
-Whisper Input uses your own API keys—no expensive subscriptions required.
+轻语输入使用你自己的 API Key，不绑定高价订阅。
 
 ```mermaid
 flowchart LR
-  A["Subscription Voice Input"] --> B["Fixed Monthly Fee"]
-  C["Whisper Input"] --> D["Pay per actual ASR duration and LLM usage"]
-  D --> E["Light usage typically costs about 1-2 RMB per month"]
+  A["订阅制语音输入"] --> B["每月固定费用"]
+  C["轻语输入"] --> D["按实际 ASR 时长和 LLM 用量付费"]
+  D --> E["轻量使用通常每月约一两元人民币级别"]
 ```
 
-Actual costs depend on your chosen service provider, model, audio duration, and usage volume. For light daily input, the cost is typically far lower than subscription-based tools like Typeless.
+实际费用取决于你选择的服务商、模型、语音时长和调用量。对于轻量日常输入，成本通常远低于 Typeless 这类订阅制工具。
 
 ---
 
-## 🚀 Installation & Usage
+## 🚀 安装与使用
 
-1. Open [Releases](https://github.com/EthanYoQ/whisper-input/releases).
-2. Download the latest Windows installer.
-3. Install and launch Whisper Input.
-4. Go to "Settings - Model Settings".
-5. Select the Qwen or Doubao option and enter the corresponding API key.
-6. Press the global shortcut key and start speaking.
+1. 打开 [Releases](https://github.com/EthanYoQ/whisper-input/releases)。
+2. 下载最新版 Windows 安装包。
+3. 安装并启动轻语输入。
+4. 进入"设置 - 模型设置"。
+5. 选择千问或豆包方案，填写对应 API Key。
+6. 按全局快捷键开始说话。
 
 ---
 
-## 🧱 Product Boundaries
+## 🧱 产品边界
 
-Whisper Input intentionally does NOT do the following:
+轻语输入刻意不做这些事情：
 
-| Does NOT Do | Reason |
+| 不做 | 原因 |
 | --- | --- |
-| ❌ Register as a Windows system IME | Stays lightweight, does not take over the system IME |
-| ❌ Meeting transcription tool | Focused on short-to-medium text input, not a meeting documentation platform |
-| ❌ Chatbot | Does not generate information the user has not spoken |
-| ❌ RAG / Agent | Maintains its position as an input tool |
-| ❌ Offline ASR-first | Current focus is cloud-first, prioritizing real-world usability |
+| ❌ 注册 Windows 系统输入法 | 保持轻量，不接管系统 IME |
+| ❌ 会议记录工具 | 专注短到中长文本输入，不做会议整理平台 |
+| ❌ 聊天机器人 | 不主动生成用户没说过的信息 |
+| ❌ RAG / Agent | 保持输入工具定位 |
+| ❌ 本地 ASR 优先 | 当前主线是 cloud-first，优先真实可用体验 |
 
 ---
 
-## 🙏 Acknowledgements: OpenLess
+## 🙏 致谢 OpenLess
 
-Whisper Input is built upon [OpenLess](https://github.com/Open-Less/openless).
+轻语输入基于 [OpenLess](https://github.com/Open-Less/openless) 改造而来。
 
-Thanks to the OpenLess authors and contributors for laying the foundation in desktop voice input, global shortcuts, recording state management, text insertion, and Tauri application infrastructure. Building on this foundation, Whisper Input pivots to a Windows cloud-first approach, focusing more on Chinese professional voice input, formal expression, Chinese-to-English translation, and low-cost API usage.
+感谢 OpenLess 作者和贡献者在桌面语音输入、全局快捷键、录音状态、文本插入和 Tauri 应用基础设施方面打下的基础。轻语输入在此基础上转向 Windows cloud-first 路线，更聚焦中文职场语音输入、正式表达、中文转英文和低成本 API 使用体验。
 
 ---
 
 ## ⭐ Star
 
-If you find this project helpful, please consider giving it a star on GitHub to support continued development.
+如果这个项目对你有帮助，欢迎前往 GitHub 点亮 Star，支持继续迭代。
 
 ## License
 
 Apache License 2.0
+
