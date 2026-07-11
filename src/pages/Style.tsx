@@ -201,26 +201,28 @@ export function Style() {
     <div className="wi-style-page">
       <PreviewPageHeader
         title={t('style.title')}
-        desc={t('style.desc')}
-        actions={
-          <div className="wi-style-master">
-            <span className="wi-style-master-label">{t('style.masterToggle')}</span>
-            <button
-              type="button"
-              onClick={onMasterToggle}
-              className={joinClassNames('wi-style-toggle', masterEnabled && 'wi-style-toggle-on')}
-              role="switch"
-              aria-checked={masterEnabled}
-              aria-label={t('style.masterToggle')}
-            >
-              <span />
-            </button>
-            {saveError?.target === 'master' && (
-              <span role="alert" className="wi-style-error wi-style-error-inline">
-                {saveError.message}
-              </span>
-            )}
-          </div>
+        desc={
+          <span className="wi-style-header-row">
+            <span>{t('style.desc')}</span>
+            <span className="wi-style-master">
+              <span className="wi-style-master-label">{t('style.masterToggle')}</span>
+              <button
+                type="button"
+                onClick={onMasterToggle}
+                className={joinClassNames('wi-style-toggle', masterEnabled && 'wi-style-toggle-on')}
+                role="switch"
+                aria-checked={masterEnabled}
+                aria-label={t('style.masterToggle')}
+              >
+                <span />
+              </button>
+              {saveError?.target === 'master' && (
+                <span role="alert" className="wi-style-error wi-style-error-inline">
+                  {saveError.message}
+                </span>
+              )}
+            </span>
+          </span>
         }
       />
       <div className="wi-style-grid">

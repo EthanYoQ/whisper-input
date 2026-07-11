@@ -121,7 +121,6 @@ export function Vocab() {
       <PreviewPageHeader
         title={t('vocab.title')}
         desc={t('vocab.desc')}
-        actions={<PreviewButton onClick={refreshAll}>{t('common.refresh')}</PreviewButton>}
       />
 
       <div className="wi-vocab-layout">

@@ -12,7 +12,8 @@ export function PageContainer({ children, phase }: PageContainerProps) {
       style={{
         flex: 1,
         minHeight: 0,
-        overflow: 'hidden',
+        overflow: 'auto',
+        overflowX: 'hidden',
         padding: 0,
         position: 'relative',
         animation: phase === 'exiting' ? 'ol-page-fadeout 0.12s linear forwards' : undefined,
