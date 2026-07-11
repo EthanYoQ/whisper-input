@@ -28,6 +28,10 @@
   <a href="https://github.com/EthanYoQ/whisper-input/releases/latest">下载最新版 Windows 安装包</a>
 </p>
 
+<p align="center">
+  <img src="./docs/images/whisper-input-hero-zh.png" alt="轻语输入 Windows AI 语音输入软件界面总览" />
+</p>
+
 ---
 
 ## 🎯 一句话说明
@@ -36,7 +40,7 @@
 
 它只做一件事：**你按下快捷键说话，它把你的口语整理成自然、正式、结构清楚的文字，并插入到当前光标位置。** 如果直接插入失败，会自动复制到剪贴板兜底。
 
-它基于 [OpenLess](https://github.com/Open-Less/openless) 改造，但不是 OpenLess 官方发行版，也不是 Typeless 官方产品。这里的 Typeless / Typeless 平替 / 开源 Typeless 只用于说明用户常见的检索意图：用开源、可自带 API Key 的方式实现类似“按住说话、松开得到润色文字”的工作流，并更聚焦中文职场表达。
+它基于 [OpenLess](https://github.com/Open-Less/openless) 改造，但不是 OpenLess 官方发行版，也不是 Typeless 官方产品。这里的 Typeless / Typeless 平替 / 开源 Typeless 只用于说明用户常见的检索意图：用开源方式实现类似“按住说话、松开得到润色文字”的工作流，并更聚焦中文职场表达。
 
 适合这些场景：
 
@@ -66,6 +70,24 @@ flowchart LR
 
 你不需要切换输入法，不需要打开聊天窗口，也不需要手动复制粘贴。  
 光标在哪里，说完的文字就尽量出现在那里；如果插入失败，会自动复制到剪贴板兜底。
+
+## 🖥️ 界面预览
+
+### 今日概览：打开软件首先看到的主界面
+
+![轻语输入今日概览主界面，展示模型状态、输入统计、使用趋势和最近识别](./docs/images/whisper-input-overview-zh.png)
+
+### 输出风格：同一段口述，按需要整理
+
+![轻语输入的原文、轻度润色、清晰结构和正式表达四种输出风格](./docs/images/whisper-input-output-styles.png)
+
+### 模型设置：选择并检查语音识别与润色服务
+
+![轻语输入模型设置页面，包含云端 ASR 与 LLM 的快速配置和连通性检查](./docs/images/whisper-input-model-settings.png)
+
+### 隐私与数据：清楚看到数据去向与本地控制项
+
+![轻语输入隐私与数据页面，展示音频数据、识别文本、本地历史记录和配置清理控制](./docs/images/whisper-input-privacy-data.png)
 
 ---
 
@@ -206,7 +228,7 @@ We have completed this update. The main changes include fixing the issue where l
 
 ## 🔐 数据与隐私
 
-轻语输入是 cloud-first 产品，不是离线 ASR 工具。你需要配置自己的云端 ASR 和 LLM API Key。
+轻语输入是 cloud-first 产品，不是离线 ASR 工具。使用前请按当前版本界面完成云端语音识别与文字润色服务配置。
 
 ```mermaid
 flowchart TB
@@ -217,7 +239,7 @@ flowchart TB
   E --> F["💻 当前应用输入框"]
   E --> G["🕘 本地历史记录"]
   H["📚 用户词典"] --> D
-  I["🔑 API Key 配置"] --> B
+  I["云端服务配置"] --> B
   I --> D
 ```
 
@@ -227,7 +249,7 @@ flowchart TB
 | 📝 ASR 文本 | 发送到你配置的 LLM 服务 |
 | 🕘 历史记录 | 默认保存在本机 |
 | 📚 用户词典 | 默认保存在本机 |
-| 🔑 API Key | 保存在本机配置中，可清空 |
+| 云端服务配置 | 保存在本机配置中，可清空 |
 
 你可以在设置中清空历史记录、词典和 API 配置。
 
@@ -242,13 +264,13 @@ flowchart TB
 | ✨ 默认 LLM | 千问 / Gemini / 豆包 | 按地区、成本和可用性选择 |
 | ⚡ 低成本模式 | 轻量 LLM | 适合高频日常输入 |
 
-设置界面会内置常用模型和调用路径。普通用户只需要选择服务商并填写 API Key。
+设置界面会提供常用模型和调用路径。普通用户可选择服务商，并按界面提示完成所需配置。
 
 ---
 
 ## 💰 成本为什么低
 
-轻语输入使用你自己的 API Key，不绑定高价订阅。
+轻语输入通过设置界面中已配置的云端服务完成语音识别与文字润色。
 
 ```mermaid
 flowchart LR
@@ -267,7 +289,7 @@ flowchart LR
 2. 下载最新版 Windows 安装包。
 3. 安装并启动轻语输入。
 4. 进入"设置 - 模型设置"。
-5. 选择千问或豆包方案，填写对应 API Key。
+5. 选择千问或豆包方案，并按界面提示完成对应配置。
 6. 按全局快捷键开始说话。
 
 ---
@@ -301,4 +323,3 @@ flowchart LR
 ## License
 
 Apache License 2.0
-

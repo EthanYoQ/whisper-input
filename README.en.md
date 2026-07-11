@@ -32,6 +32,10 @@
   <a href="https://github.com/EthanYoQ/whisper-input/releases/latest">Download latest Windows installer</a>
 </p>
 
+<p align="center">
+  <img src="./docs/images/whisper-input-hero-en.png" alt="Whisper Input Windows AI voice typing interface overview" />
+</p>
+
 ---
 
 ## 🎯 At a Glance
@@ -40,7 +44,7 @@ Whisper Input is not a traditional IME, nor a meeting transcription tool.
 
 It does one thing: **press a shortcut key, speak, and it turns your spoken words into natural, well-structured text at your cursor position.** If direct insertion fails, the result is copied to the clipboard as a fallback.
 
-This project is built upon [OpenLess](https://github.com/Open-Less/openless), but it is not an official OpenLess distribution and is not affiliated with Typeless. It explores a Windows-first, cloud-first, BYOK direction for people searching for an open-source Typeless-style voice typing workflow in Chinese workplace scenarios.
+This project is built upon [OpenLess](https://github.com/Open-Less/openless), but it is not an official OpenLess distribution and is not affiliated with Typeless. It explores a Windows-first, cloud-first direction for people searching for an open-source Typeless-style voice typing workflow in Chinese workplace scenarios.
 
 Here are some typical scenarios:
 
@@ -70,6 +74,24 @@ flowchart LR
 
 No need to switch input methods, open a chat window, or copy and paste manually.  
 Wherever your cursor is, the transcribed text appears there; if insertion fails, it is automatically copied to the clipboard as a fallback.
+
+## 🖥️ Interface Preview
+
+### Today Overview: The First Screen When You Open the App
+
+![Whisper Input overview showing model status, dictation metrics, usage trends, and recent recognition](./docs/images/whisper-input-overview-en.png)
+
+### Output Styles: Shape the Same Dictation for Different Needs
+
+![Whisper Input shows Original, Light Polish, Clear Structure, and Formal output styles side by side](./docs/images/whisper-input-output-styles.png)
+
+### Model Settings: Choose and Check Speech and Polishing Services
+
+![Whisper Input model settings with quick cloud ASR and LLM configuration plus connectivity checks](./docs/images/whisper-input-model-settings.png)
+
+### Privacy & Data: See Data Flow and Local Controls Clearly
+
+![Whisper Input privacy and data screen showing audio data, recognized text, local history, and configuration clearing controls](./docs/images/whisper-input-privacy-data.png)
 
 ---
 
@@ -210,7 +232,7 @@ No need to think in English while typing, or write Chinese first and then copy i
 
 ## 🔐 Data & Privacy
 
-Whisper Input is a cloud-first product, not an offline ASR tool. You need to configure your own cloud ASR and LLM API keys.
+Whisper Input is a cloud-first product, not an offline ASR tool. Before use, complete the cloud speech-recognition and text-polishing service setup shown in the current interface.
 
 ```mermaid
 flowchart TB
@@ -221,7 +243,7 @@ flowchart TB
   E --> F["💻 Current App Input Field"]
   E --> G["🕘 Local History"]
   H["📚 User Dictionary"] --> D
-  I["🔑 API Key Config"] --> B
+  I["Cloud Service Setup"] --> B
   I --> D
 ```
 
@@ -231,7 +253,7 @@ flowchart TB
 | 📝 ASR Text | Sent to your configured LLM service |
 | 🕘 History | Saved locally by default |
 | 📚 User Dictionary | Saved locally by default |
-| 🔑 API Key | Stored in local config, can be cleared |
+| Cloud service configuration | Stored in local config, can be cleared |
 
 You can clear history, dictionary, and API configuration from the settings.
 
@@ -246,13 +268,13 @@ You can clear history, dictionary, and API configuration from the settings.
 | ✨ Default LLM | Qwen / Gemini / Doubao | Choose based on region, cost, and availability |
 | ⚡ Low-cost mode | Lightweight LLM | Suitable for high-frequency daily input |
 
-The settings interface includes built-in common models and API endpoints. Regular users just need to select a service provider and enter their API key.
+The settings interface provides common models and service paths. Select a provider and complete the required setup shown in the interface.
 
 ---
 
 ## 💰 Why It's Low Cost
 
-Whisper Input uses your own API keys—no expensive subscriptions required.
+Whisper Input uses the cloud services configured through its settings interface for speech recognition and text polishing.
 
 ```mermaid
 flowchart LR
@@ -271,7 +293,7 @@ Actual costs depend on your chosen service provider, model, audio duration, and 
 2. Download the latest Windows installer.
 3. Install and launch Whisper Input.
 4. Go to "Settings - Model Settings".
-5. Select the Qwen or Doubao option and enter the corresponding API key.
+5. Select the Qwen or Doubao option and complete the corresponding setup shown in the interface.
 6. Press the global shortcut key and start speaking.
 
 ---
@@ -305,5 +327,3 @@ If you find this project helpful, please consider giving it a star on GitHub to 
 ## License
 
 Apache License 2.0
-
-
