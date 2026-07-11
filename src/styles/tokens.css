@@ -13,7 +13,7 @@
   --ol-ink: #0a0a0b;
   --ol-ink-2: #2a2a2d;
   --ol-ink-3: rgba(10, 10, 11, 0.62);
-  --ol-ink-4: rgba(10, 10, 11, 0.42);
+  --ol-ink-4: rgba(10, 10, 11, 0.56);
   --ol-ink-5: rgba(10, 10, 11, 0.24);
 
   --ol-blue: #2563eb;
@@ -70,7 +70,7 @@
   --ol-ink: #f4f4f5;
   --ol-ink-2: #d9dadd;
   --ol-ink-3: rgba(244, 244, 245, 0.68);
-  --ol-ink-4: rgba(244, 244, 245, 0.48);
+  --ol-ink-4: rgba(244, 244, 245, 0.62);
   --ol-ink-5: rgba(244, 244, 245, 0.30);
   --ol-blue: #6ea8fe;
   --ol-blue-hover: #8bbcff;

@@ -59,8 +59,8 @@
 .wi-stage {
   width: 100%;
   height: 100%;
-  min-width: 1180px;
-  min-height: 720px;
+  min-width: 0;
+  min-height: 0;
   background: var(--wi-window);
   color: var(--wi-text);
   font-family: var(--wi-font);
@@ -71,7 +71,7 @@
 
 .wi-shell {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
+  grid-template-columns: clamp(205px, 20vw, 250px) minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -611,13 +611,13 @@
 .wi-settings-tabs {
   display: flex;
   justify-content: space-between;
-  width: min(720px, calc(100% - 330px));
+  width: min(720px, 100%);
   height: 50px;
   min-height: 50px;
   flex: 0 0 auto;
   min-width: 0;
   border: 0;
-  border-radius: 16px;
+  border-radius: 12px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.66);
   box-shadow: var(--wi-inset-ring-soft), 0 10px 26px -24px rgba(15, 23, 42, 0.32);
@@ -677,37 +677,99 @@
 
 .wi-recording-settings-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
-  gap: 12px;
-  align-items: start;
+  grid-template-areas:
+    "recording stream"
+    "insert history";
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  align-items: stretch;
   min-width: 0;
 }
 
-.wi-recording-settings-left,
-.wi-recording-settings-right {
+.wi-recording-settings-primary {
+  grid-area: recording;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-width: 0;
+}
+
+.wi-recording-settings-primary .ol-setting-row {
+  flex: 1 1 0;
+}
+
+.wi-recording-settings-stream-startup {
+  grid-area: stream;
+}
+
+.wi-recording-settings-insert {
+  grid-area: insert;
+}
+
+.wi-recording-settings-history {
+  grid-area: history;
 }
 
 .wi-recording-settings-primary,
-.wi-recording-settings-stream,
-.wi-recording-settings-startup,
+.wi-recording-settings-stream-startup,
 .wi-recording-settings-secondary {
   min-width: 0;
+  height: 100%;
+}
+
+.wi-recording-settings-primary,
+.wi-recording-settings-stream-startup {
+  padding: 12px !important;
+}
+
+.wi-settings-panel-recording .ol-setting-row {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 12px !important;
+  align-items: center;
+  padding: 4px 0 !important;
+}
+
+.wi-settings-panel-recording .ol-setting-control {
+  align-items: center !important;
+  justify-content: flex-end;
+}
+
+.wi-settings-panel-recording .ol-setting-desc {
+  margin-top: 2px !important;
+  font-size: 11.5px !important;
+  line-height: 1.4 !important;
 }
 
 .wi-recording-settings-secondary .ol-setting-row,
 .wi-recording-settings-stream .ol-setting-row,
 .wi-recording-settings-startup .ol-setting-row {
-  padding-top: 11px !important;
-  padding-bottom: 11px !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
 }
 
 .wi-recording-settings-secondary [aria-expanded] {
-  padding-top: 12px !important;
-  padding-bottom: 12px !important;
+  padding: 7px 12px !important;
+}
+
+.wi-recording-settings-primary > div:nth-child(2),
+.wi-recording-settings-section > div:nth-child(2) {
+  margin-bottom: 3px !important;
+}
+
+.wi-recording-settings-secondary [aria-expanded] + div > div > div {
+  padding: 0 12px 8px !important;
+}
+
+.wi-recording-settings-section + .wi-recording-settings-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ol-line-soft);
+}
+
+.wi-recording-settings-status-hint {
+  margin-top: 2px;
+  color: var(--ol-ink-4);
+  font-size: 10.5px;
+  line-height: 1.35;
+  text-wrap: pretty;
 }
 
 .wi-mode-switch {
@@ -752,6 +814,137 @@
   background: var(--wi-control);
   box-shadow: var(--wi-inset-ring-soft);
   margin-bottom: 10px;
+}
+
+.wi-model-settings-compact {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wi-model-storage-notice {
+  margin: 0;
+  color: var(--ol-ink-4);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.wi-model-settings-compact .wi-model-mode {
+  min-height: 60px;
+  margin-bottom: 0;
+  padding: 5px;
+  border-radius: 14px;
+}
+
+.wi-model-settings-compact .wi-model-mode button {
+  border-radius: 8px;
+}
+
+.wi-model-settings-compact .wi-model-mode button small {
+  margin-top: 3px;
+}
+
+.wi-model-bundle-title,
+.wi-quick-card-title {
+  color: var(--ol-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wi-model-bundle-title {
+  margin-top: 1px;
+}
+
+.wi-model-settings-compact .wi-plan-grid {
+  gap: 16px;
+}
+
+.wi-model-settings-compact .wi-plan-card {
+  height: 196px;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 18px;
+  padding: 20px 48px 20px 22px;
+  border-radius: 16px;
+}
+
+.wi-model-settings-compact .wi-radio-corner {
+  top: 14px;
+  right: 14px;
+  width: 20px;
+  height: 20px;
+}
+
+.wi-model-settings-compact .wi-radio-corner.on {
+  border-width: 6px;
+}
+
+.wi-model-settings-compact .wi-plan-logo {
+  width: 76px;
+  height: 76px;
+  border-radius: 15px;
+}
+
+.wi-model-settings-compact .wi-plan-heading {
+  gap: 7px;
+  font-size: 18px;
+}
+
+.wi-model-settings-compact .wi-plan-desc {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.wi-model-settings-compact .wi-plan-meta {
+  margin-top: 7px;
+  font-size: 12.5px;
+}
+
+.wi-model-settings-compact .wi-quick-card {
+  margin-top: 0;
+  padding: 16px 18px !important;
+}
+
+.wi-model-settings-compact .wi-quick-card-title {
+  margin-bottom: 7px;
+}
+
+.wi-model-settings-compact .wi-provider-stack {
+  gap: 0;
+}
+
+.wi-model-settings-compact .wi-provider-row {
+  grid-template-columns: minmax(120px, 0.72fr) minmax(220px, 1.35fr) minmax(142px, 0.78fr) minmax(96px, 0.5fr);
+  gap: 10px;
+  padding: 10px 0;
+  align-items: center;
+}
+
+.wi-model-settings-compact .wi-provider-label {
+  gap: 3px;
+}
+
+.wi-provider-inline-check,
+.wi-provider-inline-check > div {
+  min-width: 0;
+  width: 100%;
+}
+
+.wi-provider-inline-check > div {
+  align-items: stretch !important;
+  flex-direction: column;
+  gap: 4px !important;
+}
+
+.wi-provider-inline-check button {
+  min-height: 40px;
+  max-width: none !important;
+}
+
+.wi-provider-inline-check-pair {
+  display: grid;
+  gap: 6px;
 }
 
 .wi-model-mode button {
@@ -1604,7 +1797,7 @@
 .wi-overview-page .wi-recent-row {
   grid-template-columns: 78px minmax(0, 1fr) 48px;
   gap: 12px;
-  margin: 0 -6px;
+  margin: 0;
   padding: 11px 6px;
   border-bottom: 0;
   border-radius: 12px;
@@ -1688,7 +1881,18 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 10px;
+  background: var(--wi-control-muted);
+}
+
+.wi-style-header-row {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
 }
 
 .wi-style-master-label {
@@ -2542,5 +2746,421 @@
     opacity: 1;
     transform: scale(1);
     filter: blur(0);
+  }
+}
+
+/* Shared readability and keyboard affordances. */
+.wi-stage button:focus-visible,
+.wi-stage input:focus-visible,
+.wi-stage select:focus-visible,
+.wi-stage textarea:focus-visible,
+.wi-stage [tabindex]:focus-visible {
+  outline: 2px solid var(--wi-blue);
+  outline-offset: 2px;
+}
+
+.wi-settings-layout,
+.wi-settings-panel {
+  min-width: 0;
+}
+
+.wi-settings-panel > .ol-card {
+  width: 100%;
+  border-radius: 14px !important;
+  box-shadow: var(--wi-surface-shadow) !important;
+}
+
+.wi-settings-panel-output > .ol-card,
+.wi-settings-panel-about > .ol-card {
+  width: min(760px, 100%);
+  align-self: flex-start;
+}
+
+.wi-settings-panel-privacy > .ol-card {
+  width: 100%;
+  align-self: flex-start;
+}
+
+.wi-settings-panel-privacy {
+  container-type: inline-size;
+}
+
+.wi-privacy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wi-privacy-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.85fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.wi-privacy-title {
+  color: var(--wi-text);
+  font: 750 14px/1.4 var(--wi-font);
+}
+
+.wi-privacy-desc,
+.wi-privacy-notice {
+  color: var(--wi-muted);
+  font: 500 12px/1.55 var(--wi-font);
+  text-wrap: pretty;
+}
+
+.wi-privacy-desc {
+  margin-top: 3px;
+}
+
+.wi-privacy-notice {
+  padding-top: 20px;
+}
+
+.wi-privacy-data-flow.wi-help-list {
+  gap: 0;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--wi-control-muted);
+}
+
+.wi-privacy-data-flow .wi-help-item {
+  grid-template-columns: 30px minmax(88px, 112px) minmax(0, 1fr);
+  gap: 12px;
+  min-height: 44px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12.5px;
+}
+
+.wi-privacy-data-flow .wi-help-item + .wi-help-item {
+  border-top: 1px solid var(--ol-line-soft);
+}
+
+.wi-privacy-data-icon {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--wi-blue-soft);
+  color: var(--wi-blue);
+}
+
+.wi-privacy-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.wi-privacy-control-section {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.wi-privacy-group-title {
+  padding: 0 2px;
+  color: var(--wi-muted);
+  font: 700 12.5px/1.4 var(--wi-font);
+}
+
+.wi-privacy-control-group {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--wi-control-muted);
+}
+
+.wi-privacy-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  min-height: 54px;
+  align-items: center;
+  padding: 6px 12px;
+}
+
+.wi-privacy-action-row + .wi-privacy-action-row {
+  border-top: 1px solid var(--ol-line-soft);
+}
+
+.wi-privacy-action-copy {
+  min-width: 0;
+}
+
+.wi-privacy-action-label {
+  color: var(--wi-text);
+  font: 700 13.5px/1.4 var(--wi-font);
+}
+
+.wi-privacy-action-desc {
+  max-width: 720px;
+  margin-top: 3px;
+  color: var(--wi-muted);
+  font: 500 12.5px/1.5 var(--wi-font);
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.wi-privacy-action-control {
+  display: flex;
+  min-width: 120px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.wi-privacy-action-control .wi-btn {
+  min-height: 40px;
+}
+
+@container (max-width: 700px) {
+  .wi-privacy-heading {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .wi-privacy-notice {
+    padding-top: 0;
+  }
+
+  .wi-privacy-data-flow .wi-help-item {
+    grid-template-columns: 30px minmax(82px, 104px) minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .wi-privacy-action-row {
+    gap: 14px;
+  }
+}
+
+@container (max-width: 520px) {
+  .wi-privacy-data-flow .wi-help-item {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .wi-privacy-data-flow .wi-help-item > span:last-child {
+    grid-column: 2;
+  }
+
+  .wi-privacy-action-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .wi-privacy-action-control {
+    min-width: 0;
+    justify-content: flex-start;
+  }
+}
+
+.wi-settings-toggle {
+  flex: 0 0 auto;
+}
+
+/* Reduce oversized surfaces without changing their content or actions. */
+.wi-overview-page .wi-provider-card {
+  min-height: 112px;
+  padding: 18px 20px;
+  grid-template-columns: 60px minmax(0, 1fr) auto;
+  border-radius: 16px;
+}
+
+.wi-overview-page .wi-model-logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 13px;
+}
+
+.wi-overview-page .wi-metric-grid {
+  margin-bottom: 14px;
+}
+
+.wi-overview-page .wi-metric-card {
+  height: 98px;
+  padding: 16px 18px;
+  border-radius: 16px;
+}
+
+.wi-overview-page .wi-week-card,
+.wi-overview-page .wi-recent-card {
+  padding: 18px;
+  border-radius: 16px;
+}
+
+.wi-overview-page .wi-week-y-axis,
+.wi-overview-page .wi-week-point-value {
+  font-size: 11.5px;
+}
+
+.wi-overview-page .wi-week-date,
+.wi-overview-page .wi-week-label {
+  font-size: 12px;
+}
+
+.wi-style-card {
+  padding: 16px;
+  border-radius: 14px;
+}
+
+.wi-style-sample {
+  border-radius: 8px;
+  background: rgba(243, 246, 250, 0.72);
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] .wi-style-sample {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.wi-vocab-main-only {
+  align-self: flex-start;
+  height: auto;
+  min-height: 300px;
+}
+
+@media (max-width: 1100px) {
+  .wi-shell {
+    grid-template-columns: 205px minmax(0, 1fr);
+  }
+
+  .wi-main {
+    padding: 24px 22px;
+  }
+
+  .wi-top-tools {
+    top: 20px;
+    right: 22px;
+    gap: 9px;
+  }
+
+  .wi-commandbar {
+    gap: 9px;
+  }
+
+  .wi-commandbar .wi-btn {
+    min-width: 52px;
+    padding: 0 12px;
+  }
+
+  .wi-page-head,
+  .wi-overview-page .wi-page-head {
+    padding-right: 225px;
+    margin-bottom: 18px;
+  }
+
+  .wi-page-title-block h1,
+  .wi-overview-page .wi-page-title-block h1 {
+    font-size: 26px;
+  }
+
+  .wi-overview-page,
+  .wi-history-page,
+  .wi-style-page,
+  .wi-vocab-page {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  .wi-overview-page .wi-model-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .wi-overview-page .wi-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .wi-overview-page .wi-overview-bottom {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .wi-history-toolbar {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .wi-history-search {
+    width: auto;
+    flex: 1 1 300px;
+  }
+
+  .wi-history-toolbar .wi-btn:first-of-type {
+    margin-left: 0;
+  }
+
+  .wi-table-card .wi-table {
+    min-width: 920px;
+  }
+
+  .wi-settings-tabs {
+    max-width: 100%;
+    margin-top: 54px;
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+
+  .wi-settings-tab {
+    flex: 1 0 auto;
+  }
+
+  .wi-recording-settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wi-style-grid {
+    flex: 0 0 auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: auto;
+    overflow: visible;
+  }
+
+  .wi-vocab-layout {
+    flex: 0 0 auto;
+    grid-template-columns: minmax(0, 1fr);
+    overflow: visible;
+  }
+
+  .wi-vocab-main,
+  .wi-vocab-side {
+    height: auto;
+    overflow: visible;
+  }
+
+  .wi-vocab-side {
+    grid-template-rows: auto auto;
+  }
+
+  .wi-chip-list,
+  .wi-correction-list {
+    max-height: 280px;
+  }
+}
+
+@media (max-height: 700px) {
+  .wi-overview-page,
+  .wi-history-page,
+  .wi-style-page,
+  .wi-vocab-page {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  .wi-style-grid,
+  .wi-vocab-layout {
+    flex: 0 0 auto;
+    overflow: visible;
   }
 }

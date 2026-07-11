@@ -167,6 +167,7 @@ export function Settings({ embedded = false, initialSection = 'models' }: Settin
         />
       )}
       <div
+        className="wi-settings-layout"
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -201,7 +202,11 @@ export function Settings({ embedded = false, initialSection = 'models' }: Settin
           })}
         </div>
         <div
-          className={embedded ? 'ol-thinscroll' : undefined}
+          className={[
+            'wi-settings-panel',
+            `wi-settings-panel-${section}`,
+            embedded ? 'ol-thinscroll' : '',
+          ].filter(Boolean).join(' ')}
           role="tabpanel"
           id={selectedPanelId}
           aria-labelledby={selectedTabId}
@@ -356,135 +361,200 @@ function RecordingSection() {
 
   return (
     <div className="wi-recording-settings-grid">
-      <div className="wi-recording-settings-left">
-        <Card className="wi-recording-settings-primary">
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{t('settings.recording.title')}</div>
-          <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 6 }}>{t('settings.recording.desc')}</div>
-          {isHotkeyModeMigrationNoticeActive() && (
-            <div
-              style={{
-                marginTop: 10,
-                marginBottom: 8,
-                padding: '12px 14px',
-                borderRadius: 10,
-                background: 'rgba(37,99,235,0.08)',
-                border: '0.5px solid rgba(37,99,235,0.18)',
-              }}
-            >
-              <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ol-blue)', marginBottom: 4 }}>
-                {t('settings.recording.migrationNoticeTitle')}
-              </div>
-              <div style={{ fontSize: 11.5, color: 'var(--ol-ink-3)', lineHeight: 1.55 }}>
-                {t('settings.recording.migrationNoticeDesc')}
-              </div>
+      <Card className="wi-recording-settings-primary">
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{t('settings.recording.title')}</div>
+        <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 6 }}>{t('settings.recording.desc')}</div>
+        {isHotkeyModeMigrationNoticeActive() && (
+          <div
+            style={{
+              marginTop: 10,
+              marginBottom: 8,
+              padding: '12px 14px',
+              borderRadius: 10,
+              background: 'rgba(37,99,235,0.08)',
+              border: '0.5px solid rgba(37,99,235,0.18)',
+            }}
+          >
+            <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ol-blue)', marginBottom: 4 }}>
+              {t('settings.recording.migrationNoticeTitle')}
             </div>
-          )}
-          <SettingRow label={t('settings.recording.hotkeyLabel')} desc={hotkeyDesc}>
-            <ShortcutRecorder
-              value={prefs.dictationHotkey}
-              onSave={async binding => {
-                await setDictationHotkey(binding);
-                await savePrefs({ ...prefs, dictationHotkey: binding });
-              }}
-            />
-          </SettingRow>
-          <SettingRow label={t('settings.recording.modeLabel')} desc={t('settings.recording.modeDesc')}>
-            <div style={{ display: 'inline-flex', padding: 2, borderRadius: 8, background: 'rgba(0,0,0,0.05)' }}>
-              {choices.map(([v, l]) => (
-                <button
-                  key={v}
-                  onClick={() => onModeChange(v)}
-                  style={{
-                    padding: '5px 14px', fontSize: 12, fontWeight: 500,
-                    border: 0, borderRadius: 6, fontFamily: 'inherit',
-                    background: prefs.hotkey.mode === v ? '#fff' : 'transparent',
-                    color: prefs.hotkey.mode === v ? 'var(--ol-ink)' : 'var(--ol-ink-3)',
-                    boxShadow: prefs.hotkey.mode === v ? '0 1px 2px rgba(0,0,0,.08)' : 'none',
-                    cursor: 'default',
-                    transition: 'background 0.16s var(--ol-motion-quick), color 0.16s var(--ol-motion-quick), box-shadow 0.18s var(--ol-motion-soft)',
-                  }}
-                >
-                  {l}
-                </button>
-              ))}
+            <div style={{ fontSize: 11.5, color: 'var(--ol-ink-3)', lineHeight: 1.55 }}>
+              {t('settings.recording.migrationNoticeDesc')}
             </div>
-          </SettingRow>
-          <SettingRow label={t('settings.recording.microphoneLabel')} desc={t('settings.recording.microphoneDesc')}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          </div>
+        )}
+        <SettingRow label={t('settings.recording.hotkeyLabel')} desc={hotkeyDesc}>
+          <ShortcutRecorder
+            value={prefs.dictationHotkey}
+            onSave={async binding => {
+              await setDictationHotkey(binding);
+              await savePrefs({ ...prefs, dictationHotkey: binding });
+            }}
+          />
+        </SettingRow>
+        <SettingRow label={t('settings.recording.modeLabel')} desc={t('settings.recording.modeDesc')}>
+          <div style={{ display: 'inline-flex', padding: 2, borderRadius: 8, background: 'rgba(0,0,0,0.05)' }}>
+            {choices.map(([v, l]) => (
               <button
-                type="button"
-                aria-label={t('settings.recording.microphoneLabel')}
-                onClick={() => {
-                  setMicrophonePickerOpen(true);
-                }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setMicrophonePickerOpen(true);
-                  }
-                }}
-                onChange={() => {}}
+                key={v}
+                onClick={() => onModeChange(v)}
                 style={{
-                  ...inputStyle,
-                  flex: '0 0 auto',
-                  width: 200,
-                  maxWidth: 200,
-                  height: 32,
-                  minWidth: 0,
-                  alignSelf: 'flex-start',
-                  padding: '0 9px 0 10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 8,
-                  textAlign: 'left',
-                  color: 'var(--ol-ink)',
+                  padding: '5px 14px', fontSize: 12, fontWeight: 500,
+                  border: 0, borderRadius: 6, fontFamily: 'inherit',
+                  background: prefs.hotkey.mode === v ? '#fff' : 'transparent',
+                  color: prefs.hotkey.mode === v ? 'var(--ol-ink)' : 'var(--ol-ink-3)',
+                  boxShadow: prefs.hotkey.mode === v ? '0 1px 2px rgba(0,0,0,.08)' : 'none',
+                  cursor: 'default',
+                  transition: 'background 0.16s var(--ol-motion-quick), color 0.16s var(--ol-motion-quick), box-shadow 0.18s var(--ol-motion-soft)',
                 }}
               >
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {selectedMicrophoneLabel}
-                </span>
-                <Icon name="chevRight" size={13} />
+                {l}
               </button>
-              {!microphoneDevicesLoaded && (
-                <div style={{ fontSize: 11, color: 'var(--ol-ink-4)' }}>{t('common.loading')}</div>
-              )}
-              {microphoneDevicesError && (
-                <div style={{ fontSize: 11, color: 'var(--ol-err)', lineHeight: 1.5 }}>
-                  {t('settings.recording.microphoneLoadError', { message: microphoneDevicesError })}
-                </div>
-              )}
-            </div>
-          </SettingRow>
-          {microphonePickerOpen && (
-            <MicrophonePickerDialog
-              devices={microphoneDevices}
-              selectedName={effectiveMicrophoneDeviceName}
-              onClose={() => setMicrophonePickerOpen(false)}
-              onRefresh={() => {
-                void loadMicrophoneDevices();
+            ))}
+          </div>
+        </SettingRow>
+        <SettingRow label={t('settings.recording.microphoneLabel')} desc={t('settings.recording.microphoneDesc')}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <button
+              type="button"
+              aria-label={t('settings.recording.microphoneLabel')}
+              onClick={() => setMicrophonePickerOpen(true)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setMicrophonePickerOpen(true);
+                }
               }}
-              loading={!microphoneDevicesLoaded}
-              onSelect={(name) => {
-                onMicrophoneDeviceChange(name);
+              onChange={() => {}}
+              style={{
+                ...inputStyle,
+                flex: '0 0 auto',
+                width: 200,
+                maxWidth: 200,
+                height: 32,
+                minWidth: 0,
+                alignSelf: 'flex-start',
+                padding: '0 9px 0 10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+                textAlign: 'left',
+                color: 'var(--ol-ink)',
               }}
-            />
-          )}
-          <SettingRow
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {selectedMicrophoneLabel}
+              </span>
+              <Icon name="chevRight" size={13} />
+            </button>
+            {!microphoneDevicesLoaded && (
+              <div style={{ fontSize: 11, color: 'var(--ol-ink-4)' }}>{t('common.loading')}</div>
+            )}
+            {microphoneDevicesError && (
+              <div style={{ fontSize: 11, color: 'var(--ol-err)', lineHeight: 1.5 }}>
+                {t('settings.recording.microphoneLoadError', { message: microphoneDevicesError })}
+              </div>
+            )}
+          </div>
+        </SettingRow>
+        {microphonePickerOpen && (
+          <MicrophonePickerDialog
+            devices={microphoneDevices}
+            selectedName={effectiveMicrophoneDeviceName}
+            onClose={() => setMicrophonePickerOpen(false)}
+            onRefresh={() => void loadMicrophoneDevices()}
+            loading={!microphoneDevicesLoaded}
+            onSelect={onMicrophoneDeviceChange}
+          />
+        )}
+        <SettingRow
+          label={t('settings.recording.muteDuringRecordingLabel')}
+          desc={t('settings.recording.muteDuringRecordingDesc')}
+        >
+          <Toggle
             label={t('settings.recording.muteDuringRecordingLabel')}
-            desc={t('settings.recording.muteDuringRecordingDesc')}
-          >
-            <Toggle on={prefs.muteDuringRecording} onToggle={onMuteDuringRecordingChange} />
-          </SettingRow>
-        </Card>
+            on={prefs.muteDuringRecording}
+            onToggle={onMuteDuringRecordingChange}
+          />
+        </SettingRow>
+      </Card>
 
-        <Card className="wi-recording-settings-secondary" padding={0}>
-        <Collapsible title={t('settings.recording.insertGroupTitle')} embedded>
+      <Card className="wi-recording-settings-stream-startup">
+        <section className="wi-recording-settings-section wi-recording-settings-stream">
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+            {t(isLinux
+              ? 'settings.advanced.streamingInsertTitleLinux'
+              : 'settings.advanced.streamingInsertTitle')}
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 10, lineHeight: 1.55 }}>
+            {t('settings.advanced.streamingInsertDesc')}
+          </div>
+          <SettingRow
+            label={t('settings.advanced.streamingInsertLabel')}
+            desc={t(
+              isMac
+                ? 'settings.advanced.streamingInsertHintMac'
+                : isWin
+                  ? 'settings.advanced.streamingInsertHintWindows'
+                  : 'settings.advanced.streamingInsertHintLinux'
+            )}
+          >
+            <Toggle
+              label={t('settings.advanced.streamingInsertLabel')}
+              on={prefs.streamingInsert}
+              onToggle={onStreamingInsertChange}
+            />
+          </SettingRow>
+          <SettingRow
+            label={t('settings.advanced.streamingInsertSaveClipboardLabel')}
+            desc={t('settings.advanced.streamingInsertSaveClipboardHint')}
+          >
+            <Toggle
+              label={t('settings.advanced.streamingInsertSaveClipboardLabel')}
+              on={prefs.streamingInsertSaveClipboard}
+              onToggle={onStreamingInsertSaveClipboardChange}
+            />
+          </SettingRow>
+        </section>
+
+        <section className="wi-recording-settings-section wi-recording-settings-startup">
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+            {t('settings.recording.startupGroupTitle')}
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 6, lineHeight: 1.55 }}>
+            {t('settings.recording.startupAtBootDesc')}
+          </div>
+          <AutostartRow />
+          <SettingRow
+            label={t('settings.recording.startMinimizedLabel')}
+            desc={t('settings.recording.startMinimizedDesc')}
+          >
+            <Toggle
+              label={t('settings.recording.startMinimizedLabel')}
+              on={prefs.startMinimized}
+              onToggle={onStartMinimizedChange}
+            />
+          </SettingRow>
+          {capability.statusHint && (
+            <div className="wi-recording-settings-status-hint">
+              {capability.statusHint}
+            </div>
+          )}
+        </section>
+      </Card>
+
+      <Card className="wi-recording-settings-secondary wi-recording-settings-insert" padding={0}>
+        <Collapsible title={t('settings.recording.insertGroupTitle')} defaultOpen embedded>
           <SettingRow
             label={t('settings.recording.restoreClipboardLabel')}
             desc={t('settings.recording.restoreClipboardDesc')}
           >
-            <Toggle on={prefs.restoreClipboardAfterPaste} onToggle={onRestoreClipboardChange} />
+            <Toggle
+              label={t('settings.recording.restoreClipboardLabel')}
+              on={prefs.restoreClipboardAfterPaste}
+              onToggle={onRestoreClipboardChange}
+            />
           </SettingRow>
           {capability.adapter !== 'macEventTap' && (
             <SettingRow
@@ -508,14 +578,17 @@ function RecordingSection() {
               desc={t('settings.recording.allowNonTsfFallbackDesc')}
             >
               <Toggle
+                label={t('settings.recording.allowNonTsfFallbackLabel')}
                 on={prefs.allowNonTsfInsertionFallback}
                 onToggle={onAllowNonTsfFallbackChange}
               />
             </SettingRow>
           )}
         </Collapsible>
+      </Card>
 
-        <Collapsible title={t('settings.recording.historyGroupTitle')} embedded>
+      <Card className="wi-recording-settings-secondary wi-recording-settings-history" padding={0}>
+        <Collapsible title={t('settings.recording.historyGroupTitle')} defaultOpen embedded>
           <SettingRow
             label={t('settings.recording.historyRetentionLabel')}
             desc={t('settings.recording.historyRetentionDesc')}
@@ -543,63 +616,7 @@ function RecordingSection() {
             />
           </SettingRow>
         </Collapsible>
-        </Card>
-      </div>
-
-      <div className="wi-recording-settings-right">
-        <Card className="wi-recording-settings-stream">
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
-            {t(isLinux
-              ? 'settings.advanced.streamingInsertTitleLinux'
-              : 'settings.advanced.streamingInsertTitle')}
-          </div>
-          <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 10, lineHeight: 1.55 }}>
-            {t('settings.advanced.streamingInsertDesc')}
-          </div>
-          <SettingRow
-            label={t('settings.advanced.streamingInsertLabel')}
-            desc={t(
-              isMac
-                ? 'settings.advanced.streamingInsertHintMac'
-                : isWin
-                  ? 'settings.advanced.streamingInsertHintWindows'
-                  : 'settings.advanced.streamingInsertHintLinux'
-            )}
-          >
-            <Toggle on={prefs.streamingInsert} onToggle={onStreamingInsertChange} />
-          </SettingRow>
-          <SettingRow
-            label={t('settings.advanced.streamingInsertSaveClipboardLabel')}
-            desc={t('settings.advanced.streamingInsertSaveClipboardHint')}
-          >
-            <Toggle
-              on={prefs.streamingInsertSaveClipboard}
-              onToggle={onStreamingInsertSaveClipboardChange}
-            />
-          </SettingRow>
-        </Card>
-
-        <Card className="wi-recording-settings-startup">
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
-            {t('settings.recording.startupGroupTitle')}
-          </div>
-          <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 6, lineHeight: 1.55 }}>
-            {t('settings.recording.startupAtBootDesc')}
-          </div>
-          <AutostartRow />
-          <SettingRow
-            label={t('settings.recording.startMinimizedLabel')}
-            desc={t('settings.recording.startMinimizedDesc')}
-          >
-            <Toggle on={prefs.startMinimized} onToggle={onStartMinimizedChange} />
-          </SettingRow>
-          {capability.statusHint && (
-            <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--ol-ink-4)', lineHeight: 1.5 }}>
-              {capability.statusHint}
-            </div>
-          )}
-        </Card>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -609,6 +626,7 @@ function PrivacySection() {
   const { prefs, updatePrefs, refresh } = useHotkeySettings();
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const helpItems = privacyHelpItemsCopy();
+  const groupLabels = privacyGroupLabelsCopy();
 
   if (!prefs) {
     return (
@@ -687,61 +705,95 @@ function PrivacySection() {
   const isBusy = (action: string) => busyAction === action;
 
   return (
-    <Card>
-      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{t('settings.privacy.title')}</div>
-      <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 6, lineHeight: 1.55 }}>
-        {t('settings.privacy.desc')}
+    <Card className="wi-privacy-card" padding={16}>
+      <div className="wi-privacy-heading">
+        <div>
+          <div className="wi-privacy-title">{t('settings.privacy.title')}</div>
+          <div className="wi-privacy-desc">{t('settings.privacy.desc')}</div>
+        </div>
+        <div className="wi-privacy-notice">{t('settings.privacy.notice')}</div>
       </div>
-      <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', margin: '8px 0 2px', lineHeight: 1.65 }}>
-        {t('settings.privacy.notice')}
-      </div>
-      <div className="wi-help-list">
+
+      <div className="wi-help-list wi-privacy-data-flow">
         {helpItems.map(item => (
           <div key={item.title} className="wi-help-item">
+            <span className="wi-privacy-data-icon">
+              <Icon name={item.icon} size={16} strokeWidth={1.7} />
+            </span>
             <strong>{item.title}</strong>
             <span>{item.desc}</span>
           </div>
         ))}
       </div>
-      <SettingRow
-        label={t('settings.privacy.historyEnabledLabel')}
-        desc={t('settings.privacy.historyEnabledDesc')}
-      >
-        <Toggle on={prefs.historyEnabled} onToggle={onHistoryEnabledChange} />
-      </SettingRow>
-      <SettingRow
-        label={t('settings.privacy.clearHistoryLabel')}
-        desc={t('settings.privacy.clearHistoryDesc')}
-      >
-        <Btn size="sm" variant="ghost" onClick={onClearHistory} disabled={isBusy('clearHistory')}>
-          {isBusy('clearHistory') ? t('common.saving') : t('settings.privacy.clearHistoryBtn')}
-        </Btn>
-      </SettingRow>
-      <SettingRow
-        label={t('settings.privacy.clearVocabLabel')}
-        desc={t('settings.privacy.clearVocabDesc')}
-      >
-        <Btn size="sm" variant="ghost" onClick={onClearVocab} disabled={isBusy('clearVocab')}>
-          {isBusy('clearVocab') ? t('common.saving') : t('settings.privacy.clearVocabBtn')}
-        </Btn>
-      </SettingRow>
-      <SettingRow
-        label={t('settings.privacy.clearConfigLabel')}
-        desc={t('settings.privacy.clearConfigDesc')}
-      >
-        <Btn size="sm" variant="ghost" onClick={onClearConfiguration} disabled={isBusy('clearProviderConfiguration')}>
-          {isBusy('clearProviderConfiguration') ? t('common.saving') : t('settings.privacy.clearConfigBtn')}
-        </Btn>
-      </SettingRow>
-      <SettingRow
-        label={t('settings.privacy.exportDiagnosticsLabel')}
-        desc={t('settings.privacy.exportDiagnosticsDesc')}
-      >
-        <Btn size="sm" variant="ghost" onClick={onExportDiagnostics} disabled={isBusy('exportDiagnostics')}>
-          {isBusy('exportDiagnostics') ? t('common.saving') : t('settings.privacy.exportDiagnosticsBtn')}
-        </Btn>
-      </SettingRow>
+
+      <div className="wi-privacy-controls">
+        <div className="wi-privacy-control-section wi-privacy-retention">
+          <div className="wi-privacy-group-title">{groupLabels.retention}</div>
+          <section className="wi-privacy-control-group">
+            <PrivacyActionRow
+              label={t('settings.privacy.historyEnabledLabel')}
+              desc={t('settings.privacy.historyEnabledDesc')}
+            >
+              <Toggle
+                label={t('settings.privacy.historyEnabledLabel')}
+                on={prefs.historyEnabled}
+                onToggle={onHistoryEnabledChange}
+              />
+            </PrivacyActionRow>
+            <PrivacyActionRow
+              label={t('settings.privacy.clearHistoryLabel')}
+              desc={t('settings.privacy.clearHistoryDesc')}
+            >
+              <Btn size="sm" variant="ghost" onClick={onClearHistory} disabled={isBusy('clearHistory')}>
+                {isBusy('clearHistory') ? t('common.saving') : t('settings.privacy.clearHistoryBtn')}
+              </Btn>
+            </PrivacyActionRow>
+            <PrivacyActionRow
+              label={t('settings.privacy.clearVocabLabel')}
+              desc={t('settings.privacy.clearVocabDesc')}
+            >
+              <Btn size="sm" variant="ghost" onClick={onClearVocab} disabled={isBusy('clearVocab')}>
+                {isBusy('clearVocab') ? t('common.saving') : t('settings.privacy.clearVocabBtn')}
+              </Btn>
+            </PrivacyActionRow>
+          </section>
+        </div>
+
+        <div className="wi-privacy-control-section wi-privacy-maintenance">
+          <div className="wi-privacy-group-title">{groupLabels.maintenance}</div>
+          <section className="wi-privacy-control-group">
+            <PrivacyActionRow
+              label={t('settings.privacy.clearConfigLabel')}
+              desc={t('settings.privacy.clearConfigDesc')}
+            >
+              <Btn size="sm" variant="ghost" onClick={onClearConfiguration} disabled={isBusy('clearProviderConfiguration')}>
+                {isBusy('clearProviderConfiguration') ? t('common.saving') : t('settings.privacy.clearConfigBtn')}
+              </Btn>
+            </PrivacyActionRow>
+            <PrivacyActionRow
+              label={t('settings.privacy.exportDiagnosticsLabel')}
+              desc={t('settings.privacy.exportDiagnosticsDesc')}
+            >
+              <Btn size="sm" variant="ghost" onClick={onExportDiagnostics} disabled={isBusy('exportDiagnostics')}>
+                {isBusy('exportDiagnostics') ? t('common.saving') : t('settings.privacy.exportDiagnosticsBtn')}
+              </Btn>
+            </PrivacyActionRow>
+          </section>
+        </div>
+      </div>
     </Card>
+  );
+}
+
+function PrivacyActionRow({ label, desc, children }: { label: string; desc: string; children: ReactNode }) {
+  return (
+    <div className="wi-privacy-action-row">
+      <div className="wi-privacy-action-copy">
+        <div className="wi-privacy-action-label">{label}</div>
+        <div className="wi-privacy-action-desc">{desc}</div>
+      </div>
+      <div className="wi-privacy-action-control">{children}</div>
+    </div>
   );
 }
 
@@ -750,32 +802,44 @@ function privacyHelpItemsCopy() {
   return zh
     ? [
         {
+          icon: 'mic',
           title: '音频数据',
           desc: '你的语音音频会发送到你配置的云 ASR 服务商，用于语音识别。',
         },
         {
+          icon: 'doc',
           title: '识别文本',
           desc: '识别文本会发送到你配置的 LLM 服务商，用于生成结果。',
         },
         {
+          icon: 'archive',
           title: '本地数据',
           desc: '历史记录与词汇表默认仅存储在本地设备。',
         },
       ]
     : [
         {
+          icon: 'mic',
           title: 'Audio data',
           desc: 'Your voice audio is sent to your configured cloud ASR provider for speech recognition.',
         },
         {
+          icon: 'doc',
           title: 'Recognized text',
           desc: 'Recognized text is sent to your configured LLM provider to generate the result.',
         },
         {
+          icon: 'archive',
           title: 'Local data',
           desc: 'History and vocabulary are stored only on this device by default.',
         },
       ];
+}
+
+function privacyGroupLabelsCopy() {
+  return i18n.language.toLowerCase().startsWith('zh')
+    ? { retention: '本地保留与历史', maintenance: '维护与支持' }
+    : { retention: 'Local retention and history', maintenance: 'Maintenance and support' };
 }
 
 function HotkeyRecorder({
@@ -1332,7 +1396,13 @@ function AutostartRow() {
       desc={t('settings.recording.startupAtBootDesc')}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {loaded ? <Toggle on={enabled} onToggle={onToggle} /> : null}
+        {loaded ? (
+          <Toggle
+            label={t('settings.recording.startupAtBoot')}
+            on={enabled}
+            onToggle={onToggle}
+          />
+        ) : null}
         {error && (
           <div style={{ fontSize: 11, color: 'var(--ol-err)', marginTop: 4, lineHeight: 1.5 }}>
             {t('settings.recording.startupAtBootError', { message: error })}
@@ -1343,25 +1413,40 @@ function AutostartRow() {
   );
 }
 
-export function Toggle({ on, onToggle, disabled = false }: { on: boolean; onToggle?: (next: boolean) => void; disabled?: boolean }) {
+export function Toggle({
+  label,
+  on,
+  onToggle,
+  disabled = false,
+}: {
+  label: string;
+  on: boolean;
+  onToggle?: (next: boolean) => void;
+  disabled?: boolean;
+}) {
   return (
     <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      className="wi-settings-toggle"
       onClick={() => {
         if (!disabled) onToggle?.(!on);
       }}
       disabled={disabled}
       style={{
-        position: 'relative', width: 32, height: 18, borderRadius: 999, border: 0,
+        position: 'relative', width: 38, height: 22, borderRadius: 999, border: 0,
         background: on ? 'var(--ol-blue)' : 'rgba(0,0,0,0.15)',
-        cursor: 'default',
+        cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.55 : 1,
         transition: 'background 0.16s var(--ol-motion-quick)',
       }}
     >
       <span
         style={{
-          position: 'absolute', top: 2, left: on ? 16 : 2,
-          width: 14, height: 14, borderRadius: 999, background: '#fff',
+          position: 'absolute', top: 3, left: on ? 19 : 3,
+          width: 16, height: 16, borderRadius: 999, background: '#fff',
           boxShadow: '0 1px 2px rgba(0,0,0,.25)', transition: 'left .16s var(--ol-motion-spring)',
         }}
       />
@@ -1385,7 +1470,12 @@ function LlmThinkingToggle({ enabled, onToggle, disabled = false }: { enabled: b
       <span style={{ fontSize: 11.5, color: 'var(--ol-ink-4)' }}>
         {t('settings.providers.thinkingModeLabel')}
       </span>
-      <Toggle on={enabled} onToggle={onToggle} disabled={disabled} />
+      <Toggle
+        label={t('settings.providers.thinkingModeLabel')}
+        on={enabled}
+        onToggle={onToggle}
+        disabled={disabled}
+      />
       <span style={{ fontSize: 11.5, color: enabled ? 'var(--ol-blue)' : 'var(--ol-ink-4)' }}>
         {enabled ? t('settings.providers.thinkingModeOn') : t('settings.providers.thinkingModeOff')}
       </span>
@@ -1766,8 +1856,8 @@ function ModelsSection() {
   };
 
   return (
-    <>
-      <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', lineHeight: 1.6, marginBottom: 10 }}>
+    <div className="wi-model-settings-compact">
+      <div className="wi-model-storage-notice">
         {t('settings.providers.credentialStorageNotice')}
       </div>
       <div className="wi-model-mode">
@@ -1791,7 +1881,7 @@ function ModelsSection() {
 
       {modelMode === 'simple' ? (
         <>
-          <div style={{ fontSize: 13, fontWeight: 500, marginTop: 4 }}>{modelCopy.bundleTitle}</div>
+          <div className="wi-model-bundle-title">{modelCopy.bundleTitle}</div>
           <div className="wi-plan-grid">
             {(Object.keys(MODEL_BUNDLES) as ModelBundleId[]).map(bundleId => {
               const bundle = MODEL_BUNDLES[bundleId];
@@ -1821,7 +1911,7 @@ function ModelsSection() {
             })}
           </div>
           <Card className="wi-quick-card">
-            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>{modelCopy.quickConfigTitle}</div>
+            <div className="wi-quick-card-title">{modelCopy.quickConfigTitle}</div>
             <div className="wi-provider-stack">
               {simpleBundleUsesSharedApiKey ? (
                 <div className="wi-provider-row">
@@ -1839,6 +1929,10 @@ function ModelsSection() {
                     disabled={asrControlsDisabled || llmControlsDisabled}
                   />
                   {asrApiKeyLink}
+                  <div className="wi-provider-inline-check wi-provider-inline-check-pair">
+                    <ProviderValidateButton kind="asr" label={t('settings.providers.validateAsr')} />
+                    <ProviderValidateButton kind="llm" label={t('settings.providers.validateLlm')} />
+                  </div>
                 </div>
               ) : (
                 <>
@@ -1857,6 +1951,9 @@ function ModelsSection() {
                       disabled={asrControlsDisabled}
                     />
                     {asrApiKeyLink}
+                    <div className="wi-provider-inline-check">
+                      <ProviderValidateButton kind="asr" label={t('settings.providers.validateAsr')} />
+                    </div>
                   </div>
                   <div className="wi-provider-row">
                     <div className="wi-provider-label">
@@ -1873,12 +1970,14 @@ function ModelsSection() {
                       disabled={llmControlsDisabled}
                     />
                     {llmApiKeyLink}
+                    <div className="wi-provider-inline-check">
+                      <ProviderValidateButton kind="llm" label={t('settings.providers.validateLlm')} />
+                    </div>
                   </div>
                 </>
               )}
             </div>
           </Card>
-          <ProviderValidationTools />
         </>
       ) : (
         <>
@@ -1912,6 +2011,9 @@ function ModelsSection() {
                 disabled={asrControlsDisabled}
               />
               {asrApiKeyLink}
+              <div className="wi-provider-inline-check">
+                <ProviderValidateButton kind="asr" label={t('settings.providers.validateAsr')} />
+              </div>
             </div>
           </Card>
 
@@ -1965,9 +2067,11 @@ function ModelsSection() {
                   {t('settings.advanced.openAiCompatibleActive')}
                 </div>
               )}
+              <div className="wi-provider-inline-check">
+                <ProviderValidateButton kind="llm" label={t('settings.providers.validateLlm')} />
+              </div>
             </div>
           </Card>
-          <ProviderValidationTools />
           <AdvancedSection
             llmSwitching={llmSwitching}
             beginLlmSwitch={beginLlmSwitch}
@@ -1976,19 +2080,7 @@ function ModelsSection() {
           />
         </>
       )}
-    </>
-  );
-}
-
-function ProviderValidationTools() {
-  const { t } = useTranslation();
-  return (
-    <SettingRow label={t('settings.providers.toolsLabel')} desc={t('settings.providers.validateToolsDesc')} controlWidth="100%">
-      <div style={{ display: 'grid', gap: 8, width: '100%', maxWidth: 520 }}>
-        <ProviderValidateButton kind="asr" label={t('settings.providers.validateAsr')} />
-        <ProviderValidateButton kind="llm" label={t('settings.providers.validateLlm')} />
-      </div>
-    </SettingRow>
+    </div>
   );
 }
 
@@ -2277,6 +2369,7 @@ function AdvancedSection({ llmSwitching, beginLlmSwitch, isCurrentLlmSwitch, end
                 desc={isMac ? t('settings.advanced.qwen3Desc') : t('settings.advanced.notSupportedHere')}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
                   <Toggle
+                    label={t('settings.providers.presets.asrLocalQwen3')}
                     on={isMac && isOnLocalQwen3}
                     onToggle={isMac && !busy && pendingTarget === null ? (next) => {
                       if (next) requestEnable('local-qwen3');
@@ -2293,6 +2386,7 @@ function AdvancedSection({ llmSwitching, beginLlmSwitch, isCurrentLlmSwitch, end
                 desc={t('settings.advanced.foundryDesc')}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
                   <Toggle
+                    label={t('settings.providers.presets.asrFoundryLocalWhisper')}
                     on={isOnFoundry}
                     onToggle={!busy && pendingTarget === null ? (next) => {
                       if (next) requestEnable('foundry-local-whisper');

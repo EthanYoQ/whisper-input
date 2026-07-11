@@ -61,9 +61,7 @@ export function WindowChrome({
         height,
         position: 'relative',
         borderRadius: 'var(--ol-window-shell-radius)',
-        boxShadow: os === 'win'
-          ? '0 18px 42px -26px rgba(15, 17, 22, 0.42)'
-          : 'var(--ol-shadow-xl)',
+        boxShadow: os === 'win' ? 'none' : 'var(--ol-shadow-xl)',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',

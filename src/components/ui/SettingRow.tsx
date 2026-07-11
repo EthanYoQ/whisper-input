@@ -26,7 +26,7 @@ export function SettingRow({ label, desc, children, controlWidth }: SettingRowPr
         {desc && (
           <div
             className="ol-setting-desc"
-            style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginTop: 4, lineHeight: 1.5 }}
+            style={{ fontSize: 12.5, color: 'var(--ol-ink-4)', marginTop: 4, lineHeight: 1.55 }}
           >
             {desc}
           </div>
