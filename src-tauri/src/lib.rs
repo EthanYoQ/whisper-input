@@ -123,6 +123,10 @@ pub fn run() {
                 if let Err(e) = position_capsule_bottom_center(&capsule, false) {
                     log::warn!("[capsule] position failed: {e}");
                 }
+                #[cfg(target_os = "windows")]
+                if let Err(e) = capsule.set_ignore_cursor_events(true) {
+                    log::warn!("[capsule] initial cursor passthrough failed: {e}");
+                }
                 let _ = capsule.hide();
             }
 

@@ -4118,6 +4118,23 @@ mod tests {
     }
 
     #[test]
+    fn idle_or_disabled_capsule_never_keeps_a_mouse_hitbox() {
+        assert!(!capsule_window_is_visible(true, CapsuleState::Idle));
+
+        for state in [
+            CapsuleState::Recording,
+            CapsuleState::Transcribing,
+            CapsuleState::Polishing,
+            CapsuleState::Done,
+            CapsuleState::Cancelled,
+            CapsuleState::Error,
+        ] {
+            assert!(capsule_window_is_visible(true, state));
+            assert!(!capsule_window_is_visible(false, state));
+        }
+    }
+
+    #[test]
     #[cfg(target_os = "windows")]
     fn missing_windows_hwnd_is_not_present() {
         use windows::Win32::Foundation::HWND;
@@ -4527,24 +4544,32 @@ fn capture_ime_submit_target() -> Option<ImeSubmitTarget> {
 }
 
 #[cfg(target_os = "windows")]
+fn capsule_window_hwnd<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+) -> Option<windows::Win32::Foundation::HWND> {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use windows::Win32::Foundation::HWND;
+
+    let handle = window.window_handle().ok()?;
+    let RawWindowHandle::Win32(raw) = handle.as_raw() else {
+        return None;
+    };
+    Some(HWND(raw.hwnd.get() as *mut _))
+}
+
+#[cfg(target_os = "windows")]
 fn show_capsule_window_no_activate<R: tauri::Runtime>(
     _app: &AppHandle<R>,
     window: &tauri::WebviewWindow<R>,
 ) -> bool {
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::WindowsAndMessaging::{
         SetWindowPos, ShowWindow, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
         SWP_SHOWWINDOW, SW_SHOWNOACTIVATE,
     };
 
-    let Ok(handle) = window.window_handle() else {
+    let Some(hwnd) = capsule_window_hwnd(window) else {
         return false;
     };
-    let RawWindowHandle::Win32(raw) = handle.as_raw() else {
-        return false;
-    };
-    let hwnd = HWND(raw.hwnd.get() as *mut _);
 
     let _ = unsafe { ShowWindow(hwnd, SW_SHOWNOACTIVATE) };
     let _ = unsafe {
@@ -4574,23 +4599,15 @@ fn show_capsule_window_no_activate<R: tauri::Runtime>(
 }
 
 #[cfg(target_os = "windows")]
-fn hide_capsule_window_if_present() {
-    use std::iter::once;
-    use windows::core::PCWSTR;
-    use windows::Win32::Foundation::HWND;
+fn hide_capsule_window_if_present<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
     use windows::Win32::UI::WindowsAndMessaging::{
-        FindWindowW, SetWindowPos, ShowWindow, HWND_NOTOPMOST, SWP_HIDEWINDOW, SWP_NOACTIVATE,
-        SWP_NOMOVE, SWP_NOSIZE, SW_HIDE,
+        SetWindowPos, ShowWindow, HWND_NOTOPMOST, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE,
+        SWP_NOSIZE, SW_HIDE,
     };
 
-    let title: Vec<u16> = "OpenLess Capsule".encode_utf16().chain(once(0)).collect();
-    let hwnd = match unsafe { FindWindowW(PCWSTR::null(), PCWSTR(title.as_ptr())) } {
-        Ok(hwnd) => hwnd,
-        Err(_) => return,
-    };
-    if hwnd == HWND::default() || hwnd.0.is_null() {
+    let Some(hwnd) = capsule_window_hwnd(window) else {
         return;
-    }
+    };
 
     let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
     let _ = unsafe {
@@ -4607,7 +4624,28 @@ fn hide_capsule_window_if_present() {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn hide_capsule_window_if_present() {}
+fn hide_capsule_window_if_present<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>) {}
+
+#[cfg(target_os = "windows")]
+fn set_capsule_cursor_passthrough<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    passthrough: bool,
+) {
+    if let Err(error) = window.set_ignore_cursor_events(passthrough) {
+        log::warn!("[capsule] set cursor passthrough={passthrough} failed: {error}");
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn set_capsule_cursor_passthrough<R: tauri::Runtime>(
+    _window: &tauri::WebviewWindow<R>,
+    _passthrough: bool,
+) {
+}
+
+fn capsule_window_is_visible(show_capsule: bool, state: CapsuleState) -> bool {
+    show_capsule && !matches!(state, CapsuleState::Idle)
+}
 
 fn emit_capsule(
     inner: &Arc<Inner>,
@@ -4629,10 +4667,10 @@ fn emit_capsule(
         translation,
     };
 
-    // visible / translation 是「这一帧 capsule:state event 的 payload」内容 ——
+    // state_visible / translation 是「这一帧 capsule:state event 的 payload」内容 ——
     // 必须在 call-site（即音频线程触发 emit_capsule 时）就算定，否则 main thread
     // 闭包里读到的将是「下一帧」的 state，跟实际下发给 JS 的 payload 不一致。
-    let visible = !matches!(state, CapsuleState::Idle);
+    let state_visible = capsule_window_is_visible(true, state);
 
     // emit_capsule 会被 cpal process_callback（音频回调线程）调用 ~30 Hz —— 在该
     // 线程上调用 NSWindow / HWND API 会撞 macOS dispatch_assert_queue_fail SIGTRAP
@@ -4649,13 +4687,15 @@ fn emit_capsule(
             return;
         };
         let show_capsule = inner_for_main.prefs.get().show_capsule;
+        let visible = show_capsule && state_visible;
         // 三平台统一：Done / Cancelled / Error 状态保留 ~1.5s toast
         // （schedule_capsule_idle 之后会回 Idle 隐藏）。
         // Windows 上 linger 的真实问题（截图选中 / 死区 / 拖拽卡顿）由 #140 加的
         // `hide_capsule_window_if_present()` Win32 hard-hide 在 visible=false 分支
         // 处理，不依赖把 Done/Cancelled/Error 打成 invisible。详见 PR #140 评论。
         maybe_position_capsule_bottom_center(&inner_for_main, &window, translation);
-        if show_capsule && visible {
+        if visible {
+            set_capsule_cursor_passthrough(&window, false);
             if !show_capsule_window_no_activate(&app_for_main, &window) {
                 let _ = window.show();
             }
@@ -4664,7 +4704,10 @@ fn emit_capsule(
             #[cfg(target_os = "macos")]
             crate::restore_main_window_key_if_active(&app_for_main);
         } else {
-            hide_capsule_window_if_present();
+            // Mouse passthrough is the safety net for Windows versions/drivers where an
+            // invisible transparent WebView can remain in hit testing for a short time.
+            set_capsule_cursor_passthrough(&window, true);
+            hide_capsule_window_if_present(&window);
             let _ = window.hide();
         }
     });
