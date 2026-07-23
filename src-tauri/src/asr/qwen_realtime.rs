@@ -42,6 +42,8 @@ pub fn qwen_realtime_preset() -> QwenRealtimePreset {
 pub const TARGET_AUDIO_CHUNK_BYTES: usize = 3_200;
 const BYTES_PER_MS: u64 = 32;
 const FINAL_RESULT_TIMEOUT: Duration = Duration::from_secs(12);
+const CONNECTION_RETRY_DELAYS: [Duration; 2] =
+    [Duration::from_millis(250), Duration::from_millis(750)];
 
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type WsSink = futures_util::stream::SplitSink<WsStream, Message>;
@@ -137,21 +139,7 @@ impl QwenRealtimeASR {
             &self.credentials.normalized_endpoint(),
             &self.credentials.normalized_model(),
         )?;
-        let mut request = endpoint
-            .into_client_request()
-            .map_err(|e| QwenRealtimeASRError::ConnectionFailed(e.to_string()))?;
-        request.headers_mut().insert(
-            "Authorization",
-            HeaderValue::from_str(&format!("Bearer {}", self.credentials.api_key.trim()))
-                .map_err(|e| QwenRealtimeASRError::ConnectionFailed(e.to_string()))?,
-        );
-        request
-            .headers_mut()
-            .insert("OpenAI-Beta", HeaderValue::from_static("realtime=v1"));
-
-        let (ws, _resp) = connect_async(request)
-            .await
-            .map_err(|e| QwenRealtimeASRError::ConnectionFailed(e.to_string()))?;
+        let ws = connect_with_retry(&endpoint, self.credentials.api_key.trim()).await?;
         let (write, read) = ws.split();
         *self.writer.lock().await = Some(write);
 
@@ -437,6 +425,62 @@ fn realtime_endpoint_with_model(
     Ok(url.to_string())
 }
 
+async fn connect_with_retry(
+    endpoint: &str,
+    api_key: &str,
+) -> Result<WsStream, QwenRealtimeASRError> {
+    for (retry_index, delay) in CONNECTION_RETRY_DELAYS.iter().enumerate() {
+        match connect_once(endpoint, api_key).await {
+            Ok(ws) => return Ok(ws),
+            Err(error) if is_retryable_connection_error(&error) => {
+                log::warn!(
+                    "[qwen-realtime-asr] transient connection failure; retrying ({}/{}): {}",
+                    retry_index + 1,
+                    CONNECTION_RETRY_DELAYS.len(),
+                    error
+                );
+                tokio::time::sleep(*delay).await;
+            }
+            Err(error) => return Err(QwenRealtimeASRError::ConnectionFailed(error)),
+        }
+    }
+
+    connect_once(endpoint, api_key)
+        .await
+        .map_err(QwenRealtimeASRError::ConnectionFailed)
+}
+
+async fn connect_once(endpoint: &str, api_key: &str) -> Result<WsStream, String> {
+    let mut request = endpoint.into_client_request().map_err(|e| e.to_string())?;
+    request.headers_mut().insert(
+        "Authorization",
+        HeaderValue::from_str(&format!("Bearer {api_key}")).map_err(|e| e.to_string())?,
+    );
+    request
+        .headers_mut()
+        .insert("OpenAI-Beta", HeaderValue::from_static("realtime=v1"));
+
+    connect_async(request)
+        .await
+        .map(|(ws, _)| ws)
+        .map_err(|e| e.to_string())
+}
+
+fn is_retryable_connection_error(error: &str) -> bool {
+    let error = error.to_ascii_lowercase();
+    [
+        "tls handshake eof",
+        "handshake eof",
+        "unexpected eof",
+        "connection reset",
+        "connection aborted",
+        "os error 10054",
+        "timed out",
+    ]
+    .iter()
+    .any(|needle| error.contains(needle))
+}
+
 fn session_update_message() -> String {
     json!({
         "event_id": new_event_id(),
@@ -557,6 +601,18 @@ mod tests {
             endpoint,
             "wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=qwen3-asr-flash-realtime"
         );
+    }
+
+    #[test]
+    fn transient_transport_errors_are_retried_but_auth_errors_are_not() {
+        assert!(is_retryable_connection_error("IO error: tls handshake eof"));
+        assert!(is_retryable_connection_error(
+            "IO error: connection reset by peer (os error 10054)"
+        ));
+        assert!(!is_retryable_connection_error(
+            "HTTP error: 401 Unauthorized"
+        ));
+        assert!(!is_retryable_connection_error("InvalidApiKey"));
     }
 
     #[test]
