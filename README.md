@@ -10,6 +10,10 @@
 
 <h1 align="center">轻语输入 / Whisper Input — Typeless 平替</h1>
 
+</p>
+<h2 align="center">如果有帮到你，麻烦动动小手点亮STAR ✨✨</h2>
+</p>
+
 <p align="center">
   面向 Windows 职场用户的中文 AI 语音输入工具：按全局快捷键说话，把中文语音转文字，去口头语并润色成结构化文本，插入当前光标。
 </p>
