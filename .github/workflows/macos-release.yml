@@ -1,0 +1,140 @@
+name: Build and publish macOS release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build and publish, for example v1.3.32
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build macOS ${{ matrix.arch }} installer
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            arch: x64
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            arch: arm64
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      TARGET: ${{ matrix.target }}
+      ARCH: ${{ matrix.arch }}
+
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Set up stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build the macOS DMG
+        run: npm run tauri build -- --target "$TARGET"
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          dmg_dir="src-tauri/target/${TARGET}/release/bundle/dmg"
+          dmg="$(find "$dmg_dir" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+
+          if [ -z "$dmg" ]; then
+            echo "No DMG was produced in $dmg_dir" >&2
+            exit 1
+          fi
+
+          mkdir -p release-assets
+          asset="Whisper_Input_${version}_${ARCH}.dmg"
+          cp "$dmg" "release-assets/$asset"
+          shasum -a 256 "release-assets/$asset" > "release-assets/$asset.sha256"
+
+      - name: Upload macOS release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish macOS release assets
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Download macOS release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: macos-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Create or update the GitHub release
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=(release-assets/*)
+
+          if [ "${#assets[@]}" -ne 4 ]; then
+            echo "Expected two DMGs and two SHA-256 files, found ${#assets[@]}." >&2
+            printf '%s\n' "${assets[@]}" >&2
+            exit 1
+          fi
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            exit 0
+          fi
+
+          cat > release-notes.md <<'EOF'
+          ## macOS downloads
+
+          - Apple Silicon (M1 and newer): `arm64` DMG
+          - Intel Mac: `x64` DMG
+          - macOS 12 or later is required.
+
+          Each installer has a matching SHA-256 checksum file.
+
+          ## Signing status
+
+          These macOS installers are not code-signed or notarized because this repository has no Apple signing credentials configured. macOS may require the user to explicitly allow the app in Privacy & Security after opening it.
+          EOF
+
+          gh release create "$RELEASE_TAG" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Whisper Input $RELEASE_TAG" \
+            --notes-file release-notes.md
