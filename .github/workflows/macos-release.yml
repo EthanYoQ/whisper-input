@@ -63,7 +63,10 @@ jobs:
           mkdir -p release-assets
           asset="Whisper_Input_${version}_${ARCH}.dmg"
           cp "$dmg" "release-assets/$asset"
-          shasum -a 256 "release-assets/$asset" > "release-assets/$asset.sha256"
+          (
+            cd release-assets
+            shasum -a 256 "$asset" > "$asset.sha256"
+          )
 
       - name: Upload macOS release assets
         uses: actions/upload-artifact@v4
