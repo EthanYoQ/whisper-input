@@ -65,16 +65,12 @@ function Invoke-Msi {
   return $process.ExitCode
 }
 
-function Get-ObjectPropertyValue {
+function Get-RegistryPropertyValue {
   param(
-    [object]$Object,
+    [string]$Path,
     [string]$Name
   )
-  $property = $Object.PSObject.Properties[$Name]
-  if ($property) {
-    return $property.Value
-  }
-  return $null
+  try { return Get-ItemPropertyValue -LiteralPath $Path -Name $Name -ErrorAction Stop } catch { return $null }
 }
 
 function Get-AppRegistration {
@@ -86,9 +82,15 @@ function Get-AppRegistration {
   $entries = foreach ($root in $roots) {
     if (Test-Path -LiteralPath $root) {
       Get-ChildItem -LiteralPath $root | ForEach-Object {
-        $item = Get-ItemProperty -LiteralPath $_.PSPath
-        if ((Get-ObjectPropertyValue -Object $item -Name "DisplayName") -eq $ProductName) {
-          $item
+        $path = $_.PSPath
+        $displayName = Get-RegistryPropertyValue -Path $path -Name "DisplayName"
+        if ($displayName -eq $ProductName) {
+          [pscustomobject]@{
+            DisplayName = $displayName
+            DisplayVersion = Get-RegistryPropertyValue -Path $path -Name "DisplayVersion"
+            InstallLocation = Get-RegistryPropertyValue -Path $path -Name "InstallLocation"
+            UninstallString = Get-RegistryPropertyValue -Path $path -Name "UninstallString"
+          }
         }
       }
     }
@@ -102,7 +104,7 @@ function Get-InstalledBinary {
     [string]$BinaryName
   )
   $roots = @()
-  $installLocation = Get-ObjectPropertyValue -Object $Registration -Name "InstallLocation"
+  $installLocation = $Registration.InstallLocation
   if ($installLocation -and (Test-Path -LiteralPath $installLocation)) {
     $roots += $installLocation
   }
@@ -142,12 +144,12 @@ function Test-InstalledAppLaunch {
 
 function Invoke-NsisUninstall {
   param([object]$Registration)
-  $uninstall = [string](Get-ObjectPropertyValue -Object $Registration -Name "UninstallString")
+  $uninstall = [string]$Registration.UninstallString
   $pathMatch = [regex]::Match($uninstall, '^"(?<path>[^"]+)"')
   $uninstaller = if ($pathMatch.Success) {
     $pathMatch.Groups["path"].Value
-  } elseif (Get-ObjectPropertyValue -Object $Registration -Name "InstallLocation") {
-    Join-Path (Get-ObjectPropertyValue -Object $Registration -Name "InstallLocation") "uninstall.exe"
+  } elseif ($Registration.InstallLocation) {
+    Join-Path $Registration.InstallLocation "uninstall.exe"
   } else {
     Join-Path $env:ProgramFiles "Whisper Input\uninstall.exe"
   }
@@ -193,7 +195,7 @@ try {
 
   Invoke-Msi -Action install -MsiPath $expectedMsi | Out-Null
   $registration = Get-AppRegistration -ProductName $release.productName
-  if ($registration.Count -ne 1 -or (Get-ObjectPropertyValue -Object $registration[0] -Name "DisplayVersion") -ne $version) {
+  if ($registration.Count -ne 1 -or $registration[0].DisplayVersion -ne $version) {
     throw "MSI upgrade did not register $($release.productName) version $version."
   }
   Add-Check -Name "msi-upgrade" -Status "passed" -Detail "Upgraded from $($windows.upgradeBaseline.tag) to $version."
@@ -208,7 +210,7 @@ try {
     throw "NSIS install failed with exit code $($setupProcess.ExitCode)."
   }
   $registration = Get-AppRegistration -ProductName $release.productName
-  if ($registration.Count -ne 1 -or (Get-ObjectPropertyValue -Object $registration[0] -Name "DisplayVersion") -ne $version) {
+  if ($registration.Count -ne 1 -or $registration[0].DisplayVersion -ne $version) {
     throw "NSIS install did not register $($release.productName) version $version."
   }
   Add-Check -Name "nsis-install" -Status "passed" -Detail "Installed the NSIS setup executable silently."
