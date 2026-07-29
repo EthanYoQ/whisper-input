@@ -1,0 +1,165 @@
+name: Qualify Windows installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      contract_path:
+        description: 冻结的发布契约路径
+        required: true
+        default: release-contracts/v1.3.34.json
+        type: string
+
+# Windows 构建与安装验收不得创建或修改 GitHub Release。
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: Build and qualify Windows x64 installers
+    runs-on: windows-2022
+    timeout-minutes: 75
+
+    steps:
+      - name: Check out the frozen release contract
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Freeze and validate the release contract
+        id: contract
+        shell: pwsh
+        env:
+          CONTRACT_PATH: ${{ inputs.contract_path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Test-Path -LiteralPath $env:CONTRACT_PATH)) {
+            throw "Release contract not found: $env:CONTRACT_PATH"
+          }
+          $contract = Get-Content -LiteralPath $env:CONTRACT_PATH -Raw | ConvertFrom-Json
+          if ($contract.schemaVersion -ne 1) { throw 'Unsupported release contract schema.' }
+          if ($contract.release.tag -notmatch '^v\d+\.\d+\.\d+$') { throw 'Release tag must be a stable vX.Y.Z tag.' }
+          if ($contract.release.sourceCommit -notmatch '^[0-9a-f]{40}$') { throw 'Release source commit must be a full SHA-1.' }
+          if (-not (Test-Path -LiteralPath 'scripts/qualify-windows-installer.ps1')) { throw 'Windows installer qualifier script is missing.' }
+          Copy-Item -LiteralPath $env:CONTRACT_PATH -Destination (Join-Path $env:RUNNER_TEMP 'release-contract.json') -Force
+          Copy-Item -LiteralPath 'scripts/qualify-windows-installer.ps1' -Destination (Join-Path $env:RUNNER_TEMP 'qualify-windows-installer.ps1') -Force
+          "release_tag=$($contract.release.tag)" >> $env:GITHUB_OUTPUT
+          "source_commit=$($contract.release.sourceCommit)" >> $env:GITHUB_OUTPUT
+          "contract_sha256=$((Get-FileHash -Algorithm SHA256 -LiteralPath $env:CONTRACT_PATH).Hash.ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "RELEASE_CONTRACT=$(Join-Path $env:RUNNER_TEMP 'release-contract.json')" >> $env:GITHUB_ENV
+
+      - name: Check out the immutable release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.contract.outputs.release_tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify source provenance and package versions
+        shell: pwsh
+        env:
+          EXPECTED_COMMIT: ${{ steps.contract.outputs.source_commit }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $contract = Get-Content -LiteralPath $env:RELEASE_CONTRACT -Raw | ConvertFrom-Json
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:EXPECTED_COMMIT) { throw "Checked-out source $actual does not match contract $env:EXPECTED_COMMIT." }
+          if ((git rev-list -n 1 $contract.release.tag).Trim() -ne $actual) { throw 'Release tag does not resolve to the checked-out source.' }
+          $expectedVersion = $contract.release.tag.TrimStart('v')
+          $versions = @(
+            (Get-Content package.json -Raw | ConvertFrom-Json).version,
+            (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version,
+            (Select-String -LiteralPath src-tauri/Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+          )
+          if (($versions | Select-Object -Unique).Count -ne 1 -or $versions[0] -ne $expectedVersion) {
+            throw "Version mismatch: expected $expectedVersion, found $($versions -join ', ')."
+          }
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20.19.0"
+          cache: npm
+
+      - name: Set up stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Verify Windows build prerequisites
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/windows-preflight.ps1 -Toolchain msvc
+
+      - name: Build standard Windows installers
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/windows-package-msvc.ps1 -ArtifactsRoot .artifacts/release-assets -CleanArtifacts
+
+      - name: Write artifact checksums and verify the contract asset set
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $contract = Get-Content -LiteralPath $env:RELEASE_CONTRACT -Raw | ConvertFrom-Json
+          $root = Join-Path $PWD '.artifacts/release-assets'
+          $expected = @($contract.release.windows.assets | Where-Object { $_ -notlike '*.sha256' })
+          foreach ($name in $expected) {
+            $path = Join-Path $root $name
+            if (-not (Test-Path -LiteralPath $path)) { throw "Expected Windows asset is missing: $name" }
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
+            "$hash *$name" | Set-Content -LiteralPath "$path.sha256" -Encoding ascii
+          }
+          $actual = @(Get-ChildItem -LiteralPath $root -File | Select-Object -ExpandProperty Name | Sort-Object)
+          $expectedAll = @($contract.release.windows.assets | Sort-Object)
+          if (Compare-Object -ReferenceObject $expectedAll -DifferenceObject $actual) {
+            throw "Windows asset set differs from the frozen contract. Actual: $($actual -join ', ')"
+          }
+
+      - name: Install, launch, upgrade, and uninstall Windows installers
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          & pwsh -NoProfile -File (Join-Path $env:RUNNER_TEMP 'qualify-windows-installer.ps1') `
+            -ContractPath $env:RELEASE_CONTRACT `
+            -ArtifactsRoot (Join-Path $PWD '.artifacts/release-assets') `
+            -EvidencePath (Join-Path $PWD '.artifacts/evidence/windows-installer-acceptance.json') `
+            -Repository $env:GITHUB_REPOSITORY
+
+      - name: Write qualification manifest
+        if: always()
+        shell: pwsh
+        env:
+          CONTRACT_SHA256: ${{ steps.contract.outputs.contract_sha256 }}
+          SOURCE_COMMIT: ${{ steps.contract.outputs.source_commit }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $PWD '.artifacts/release-assets'
+          $records = @()
+          if (Test-Path -LiteralPath $root) {
+            $records = Get-ChildItem -LiteralPath $root -File | Sort-Object Name | ForEach-Object {
+              [ordered]@{ name = $_.Name; size = $_.Length; sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant() }
+            }
+          }
+          $acceptancePath = Join-Path $PWD '.artifacts/evidence/windows-installer-acceptance.json'
+          $acceptance = if (Test-Path -LiteralPath $acceptancePath) { Get-Content -LiteralPath $acceptancePath -Raw | ConvertFrom-Json } else { $null }
+          [ordered]@{
+            schemaVersion = 1
+            releaseTag = (Get-Content -LiteralPath $env:RELEASE_CONTRACT -Raw | ConvertFrom-Json).release.tag
+            sourceCommit = $env:SOURCE_COMMIT
+            contractSha256 = $env:CONTRACT_SHA256
+            workflowRunId = $env:GITHUB_RUN_ID
+            artifacts = $records
+            acceptance = $acceptance
+          } | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath (Join-Path $PWD '.artifacts/qualification-manifest.json') -Encoding utf8
+
+      - name: Upload Windows qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qualified-windows-${{ steps.contract.outputs.release_tag }}
+          path: |
+            .artifacts/release-assets/
+            .artifacts/evidence/
+            .artifacts/qualification-manifest.json
+          if-no-files-found: warn
+          retention-days: 14

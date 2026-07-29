@@ -1,0 +1,167 @@
+name: Promote qualified desktop release
+
+on:
+  workflow_dispatch:
+    inputs:
+      contract_path:
+        description: 冻结的发布契约路径
+        required: true
+        default: release-contracts/v1.3.34.json
+        type: string
+      windows_run_id:
+        description: 成功的 Qualify Windows installers 工作流运行 ID
+        required: true
+        type: string
+      macos_run_id:
+        description: 成功的 Build macOS release assets 运行 ID；留空时复用当前 Release 中的 macOS 资产
+        required: false
+        type: string
+
+# 唯一可以变更 GitHub Release 的工作流；只提升已验收、已校验的字节。
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  promote:
+    name: Publish macOS and Windows assets together
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CONTRACT_PATH: ${{ inputs.contract_path }}
+      WINDOWS_RUN_ID: ${{ inputs.windows_run_id }}
+      MACOS_RUN_ID: ${{ inputs.macos_run_id }}
+
+    steps:
+      - name: Check out the frozen release contract
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Freeze and validate the release contract
+        id: contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$CONTRACT_PATH"
+          test "$(jq -r '.schemaVersion' "$CONTRACT_PATH")" = "1"
+          tag="$(jq -r '.release.tag' "$CONTRACT_PATH")"
+          sha="$(jq -r '.release.sourceCommit' "$CONTRACT_PATH")"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "source_commit=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify Windows qualification output
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.contract.outputs.release_tag }}
+          SOURCE_COMMIT: ${{ steps.contract.outputs.source_commit }}
+        run: |
+          set -euo pipefail
+          run="$(gh run view "$WINDOWS_RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion,headSha,workflowName,url)"
+          test "$(jq -r '.conclusion' <<<"$run")" = "success"
+          test "$(jq -r '.workflowName' <<<"$run")" = "Qualify Windows installers"
+          gh run download "$WINDOWS_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "qualified-windows-$RELEASE_TAG" --dir incoming/windows
+          manifest="incoming/windows/qualification-manifest.json"
+          test -f "$manifest"
+          test "$(jq -r '.releaseTag' "$manifest")" = "$RELEASE_TAG"
+          test "$(jq -r '.sourceCommit' "$manifest")" = "$SOURCE_COMMIT"
+          test "$(jq -r '.acceptance.status' "$manifest")" = "passed"
+
+      - name: Download and verify macOS release output
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.contract.outputs.release_tag }}
+          SOURCE_COMMIT: ${{ steps.contract.outputs.source_commit }}
+        run: |
+          set -euo pipefail
+          mkdir -p incoming/macos
+          if [ -n "$MACOS_RUN_ID" ]; then
+            run="$(gh run view "$MACOS_RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion,headSha,workflowName,url)"
+            test "$(jq -r '.conclusion' <<<"$run")" = "success"
+            test "$(jq -r '.workflowName' <<<"$run")" = "Build macOS release assets"
+            test "$(jq -r '.headSha' <<<"$run")" = "$SOURCE_COMMIT"
+            gh run download "$MACOS_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "macos-arm64-$RELEASE_TAG" --dir incoming/macos
+          else
+            gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+            while IFS= read -r asset; do
+              gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir incoming/macos
+            done < <(jq -r '.release.macos.assets[]' "$CONTRACT_PATH")
+          fi
+
+      - name: Verify assets and assemble the unified release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets promotion-evidence
+          while IFS= read -r asset; do
+            path="$(find incoming/macos -type f -name "$asset" -print -quit)"
+            test -n "$path"
+            cp "$path" "release-assets/$asset"
+          done < <(jq -r '.release.macos.assets[]' "$CONTRACT_PATH")
+          while IFS= read -r asset; do
+            path="$(find incoming/windows/release-assets -type f -name "$asset" -print -quit)"
+            test -n "$path"
+            cp "$path" "release-assets/$asset"
+          done < <(jq -r '.release.windows.assets[]' "$CONTRACT_PATH")
+          while IFS= read -r checksum; do
+            (cd release-assets && sha256sum --check "$checksum")
+          done < <(find release-assets -maxdepth 1 -type f -name '*.sha256' -printf '%f\n' | sort)
+          actual="$(find release-assets -maxdepth 1 -type f -printf '%f\n' | sort)"
+          expected="$(jq -r '.release.macos.assets[], .release.windows.assets[]' "$CONTRACT_PATH" | sort)"
+          test "$actual" = "$expected"
+          sha256sum release-assets/* > promotion-evidence/asset-sha256s.txt
+          jq -n \
+            --arg tag "$(jq -r '.release.tag' "$CONTRACT_PATH")" \
+            --arg source "$(jq -r '.release.sourceCommit' "$CONTRACT_PATH")" \
+            --arg windowsRun "$WINDOWS_RUN_ID" \
+            --arg macosRun "$MACOS_RUN_ID" \
+            --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{schemaVersion: 1, releaseTag: $tag, sourceCommit: $source, windowsQualificationRunId: $windowsRun, macosBuildRunId: $macosRun, generatedAtUtc: $generatedAt}' \
+            > promotion-evidence/promotion-manifest.json
+
+      - name: Create or update the Chinese GitHub Release
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.contract.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.zh-CN.md <<'EOF'
+          ## 下载
+
+          - **macOS（Apple 芯片，M1 及更新机型）**：`Whisper_Input_1.3.34_arm64.dmg`
+          - **Windows x64 安装程序**：`Whisper_Input_1.3.34_x64_setup.exe`
+          - **Windows x64 MSI 安装包**：`Whisper_Input_1.3.34_x64_en-US.msi`
+          - **Windows x64 便携版**：`Whisper_Input_1.3.34_x64_portable.zip`
+
+          同一版本的 macOS 与 Windows 文件都在本 Release 的“Assets”列表中；每个文件旁都有对应的 SHA-256 校验文件。
+
+          ## 安装说明
+
+          - macOS 需要 12.0 或更高版本。该 DMG 未进行 Apple 代码签名或公证，首次打开时系统可能要求在“隐私与安全性”中手动允许。
+          - Windows 安装程序仅适用于 x64。标准安装使用系统范围安装模式，可能要求管理员权限；便携版无需安装，但仍依赖系统的 Microsoft Edge WebView2 运行时。
+          - 当前发布流程未配置 Windows Authenticode 代码签名，Windows 可能显示来源提示。
+
+          ## 更新范围
+
+          这个列表统一展示 GitHub Release 下载文件，不代表已新增或验证应用内自动更新。请在更新时下载与自己系统匹配的文件。
+          EOF
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "Whisper Input $RELEASE_TAG" --notes-file release-notes.zh-CN.md
+          else
+            gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --title "Whisper Input $RELEASE_TAG" --notes-file release-notes.zh-CN.md
+          fi
+
+      - name: Upload promotion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: promotion-evidence-${{ steps.contract.outputs.release_tag }}
+          path: promotion-evidence/
+          if-no-files-found: warn
+          retention-days: 90
