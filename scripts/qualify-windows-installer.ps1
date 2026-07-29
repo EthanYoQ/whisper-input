@@ -165,7 +165,8 @@ function Invoke-NsisUninstall {
 function Assert-Removed {
   param([string]$ProductName)
   Start-Sleep -Seconds 2
-  if ((Get-AppRegistration -ProductName $ProductName).Count -ne 0) {
+  $registrations = @(Get-AppRegistration -ProductName $ProductName)
+  if ($registrations.Count -ne 0) {
     throw "$ProductName is still registered after uninstall."
   }
 }
