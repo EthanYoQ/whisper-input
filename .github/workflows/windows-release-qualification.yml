@@ -91,6 +91,21 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File scripts/windows-preflight.ps1 -Toolchain msvc
 
+      - name: Pin the Rust linker to Visual Studio
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $installationPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ([string]::IsNullOrWhiteSpace($installationPath)) { throw 'Visual Studio C++ tools were not found.' }
+          $linker = Get-ChildItem -LiteralPath (Join-Path $installationPath 'VC\Tools\MSVC') -Directory |
+            Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName 'bin\Hostx64\x64\link.exe' } |
+            Where-Object { Test-Path -LiteralPath $_ } |
+            Select-Object -First 1
+          if (-not $linker) { throw 'Microsoft link.exe was not found.' }
+          "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$linker" >> $env:GITHUB_ENV
+
       - name: Build standard Windows installers
         shell: pwsh
         run: pwsh -NoProfile -File scripts/windows-package-msvc.ps1 -ArtifactsRoot .artifacts/release-assets -CleanArtifacts
@@ -133,14 +148,16 @@ jobs:
           SOURCE_COMMIT: ${{ steps.contract.outputs.source_commit }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $root = Join-Path $PWD '.artifacts/release-assets'
+          $artifactsRoot = Join-Path $PWD '.artifacts'
+          New-Item -ItemType Directory -Force -Path $artifactsRoot | Out-Null
+          $root = Join-Path $artifactsRoot 'release-assets'
           $records = @()
           if (Test-Path -LiteralPath $root) {
             $records = Get-ChildItem -LiteralPath $root -File | Sort-Object Name | ForEach-Object {
               [ordered]@{ name = $_.Name; size = $_.Length; sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant() }
             }
           }
-          $acceptancePath = Join-Path $PWD '.artifacts/evidence/windows-installer-acceptance.json'
+          $acceptancePath = Join-Path $artifactsRoot 'evidence/windows-installer-acceptance.json'
           $acceptance = if (Test-Path -LiteralPath $acceptancePath) { Get-Content -LiteralPath $acceptancePath -Raw | ConvertFrom-Json } else { $null }
           [ordered]@{
             schemaVersion = 1
@@ -150,7 +167,7 @@ jobs:
             workflowRunId = $env:GITHUB_RUN_ID
             artifacts = $records
             acceptance = $acceptance
-          } | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath (Join-Path $PWD '.artifacts/qualification-manifest.json') -Encoding utf8
+          } | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath (Join-Path $artifactsRoot 'qualification-manifest.json') -Encoding utf8
 
       - name: Upload Windows qualification evidence
         if: always()
