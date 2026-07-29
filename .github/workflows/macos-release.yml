@@ -16,23 +16,13 @@ permissions:
 
 jobs:
   build:
-    name: Build macOS ${{ matrix.arch }} installer
-    runs-on: ${{ matrix.runner }}
+    name: Build macOS arm64 installer
+    runs-on: macos-14
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-13
-            target: x86_64-apple-darwin
-            arch: x64
-          - runner: macos-14
-            target: aarch64-apple-darwin
-            arch: arm64
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-      TARGET: ${{ matrix.target }}
-      ARCH: ${{ matrix.arch }}
+      TARGET: aarch64-apple-darwin
+      ARCH: arm64
 
     steps:
       - name: Check out the release tag
@@ -49,7 +39,7 @@ jobs:
       - name: Set up stable Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: aarch64-apple-darwin
 
       - name: Install frontend dependencies
         run: npm ci
@@ -78,7 +68,7 @@ jobs:
       - name: Upload macOS release assets
         uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}
+          name: macos-arm64
           path: release-assets/
           if-no-files-found: error
           retention-days: 14
@@ -109,8 +99,8 @@ jobs:
           shopt -s nullglob
           assets=(release-assets/*)
 
-          if [ "${#assets[@]}" -ne 4 ]; then
-            echo "Expected two DMGs and two SHA-256 files, found ${#assets[@]}." >&2
+          if [ "${#assets[@]}" -ne 2 ]; then
+            echo "Expected one DMG and one SHA-256 file, found ${#assets[@]}." >&2
             printf '%s\n' "${assets[@]}" >&2
             exit 1
           fi
@@ -124,7 +114,6 @@ jobs:
           ## macOS downloads
 
           - Apple Silicon (M1 and newer): `arm64` DMG
-          - Intel Mac: `x64` DMG
           - macOS 12 or later is required.
 
           Each installer has a matching SHA-256 checksum file.
