@@ -151,11 +151,12 @@ jobs:
           这个列表统一展示 GitHub Release 下载文件，不代表已新增或验证应用内自动更新。请在更新时下载与自己系统匹配的文件。
           EOF
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            : > promotion-evidence/missing-release-assets.txt
             while IFS= read -r asset; do
               local_digest="sha256:$(sha256sum "release-assets/$asset" | cut -d' ' -f1)"
               existing_digest="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq ".assets[] | select(.name == \"$asset\") | .digest")"
               if [ -z "$existing_digest" ]; then
-                gh release upload "$RELEASE_TAG" "release-assets/$asset" --repo "$GITHUB_REPOSITORY"
+                echo "$asset" >> promotion-evidence/missing-release-assets.txt
               elif [ "$existing_digest" = "$local_digest" ]; then
                 echo "Preserving existing same-byte asset and download counter: $asset"
               else
@@ -163,6 +164,10 @@ jobs:
                 exit 1
               fi
             done < <(find release-assets -maxdepth 1 -type f -printf '%f\n' | sort)
+            while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              gh release upload "$RELEASE_TAG" "release-assets/$asset" --repo "$GITHUB_REPOSITORY"
+            done < promotion-evidence/missing-release-assets.txt
             gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "Whisper Input $RELEASE_TAG" --notes-file release-notes.zh-CN.md
           else
             gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --title "Whisper Input $RELEASE_TAG" --notes-file release-notes.zh-CN.md
