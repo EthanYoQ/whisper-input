@@ -81,7 +81,7 @@ Wherever your cursor is, the transcribed text appears there; if insertion fails,
 
 ### Output Styles: Shape the Same Dictation for Different Needs
 
-![Whisper Input shows Original, Light Polish, Clear Structure, and Formal output styles side by side](./docs/images/whisper-input-output-styles.png)
+![Whisper Input shows Raw, Light polish, Structured, and Formal output styles side by side](./docs/images/whisper-input-output-styles-en.png)
 
 ### Model Settings: Choose and Check Speech and Polishing Services
 
