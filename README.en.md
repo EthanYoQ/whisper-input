@@ -1,6 +1,6 @@
 <div align="center">
 
-**English** | [English](README.en.md)
+**English** | [中文](README.md)
 
 </div>
 
@@ -8,18 +8,14 @@
   <img src="./public/AppIcon.png" width="104" height="104" alt="Whisper Input Logo" />
 </p>
 
-<h1 align="center">Whisper Input / Qingyu — OpenLess-based Windows Voice Typing</h1>
+<h1 align="center">Whisper Input / Qingyu — Windows AI Voice Typing</h1>
 
 <p align="center">
-  An OpenLess-based Windows AI voice input tool for Chinese workplace writing: hold a global hotkey, speak naturally, turn speech to text, remove filler words, polish or structure the result, and insert it at the current cursor position.
+  Hold a global hotkey and speak naturally. Whisper Input removes filler words, structures the result, and inserts usable text at the current cursor position.
 </p>
 
 <p align="center">
-  Search intent: <strong>OpenLess alternative</strong>, <strong>Typeless alternative</strong>, <strong>typeless-alternative</strong>, <strong>Windows voice typing</strong>, <strong>AI voice dictation</strong>, <strong>Chinese speech-to-text</strong>, <strong>workplace dictation</strong>, <strong>Chinese-to-English voice input</strong>.
-</p>
-
-<p align="center">
-  中文搜索意图：<strong>OpenLess 改造版</strong>、<strong>Typeless 平替</strong>、<strong>开源 Typeless</strong>、<strong>Windows 语音输入</strong>、<strong>快捷键语音转文字</strong>、<strong>职场语音输入</strong>、<strong>中文转英文语音输入</strong>。
+  Built for Windows users who want usable text for chat, writing, work notes, task breakdowns, or Chinese-to-English output without switching to a separate chat window.
 </p>
 
 <p align="center">
@@ -44,7 +40,9 @@ Whisper Input is not a traditional IME, nor a meeting transcription tool.
 
 It does one thing: **press a shortcut key, speak, and it turns your spoken words into natural, well-structured text at your cursor position.** If direct insertion fails, the result is copied to the clipboard as a fallback.
 
-This project is built upon [OpenLess](https://github.com/Open-Less/openless), but it is not an official OpenLess distribution and is not affiliated with Typeless. It explores a Windows-first, cloud-first direction for people searching for an open-source Typeless-style voice typing workflow in Chinese workplace scenarios.
+It is useful for chat, writing, work notes, task breakdowns, and Chinese dictation that should become English output. The focus is usable text rather than raw transcription alone.
+
+This project is built upon [OpenLess](https://github.com/Open-Less/openless), but it is not an official OpenLess distribution and is not affiliated with Typeless.
 
 Here are some typical scenarios:
 

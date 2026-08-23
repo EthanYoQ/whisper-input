@@ -1,6 +1,6 @@
 <div align="center">
 
-[English](README.md) | **中文**
+[English](README.en.md) | **中文**
 
 </div>
 
@@ -8,18 +8,14 @@
   <img src="./public/AppIcon.png" width="104" height="104" alt="Whisper Input Logo" />
 </p>
 
-<h1 align="center">轻语输入 / Whisper Input — Typeless 平替</h1>
+<h1 align="center">轻语输入 / Whisper Input — 中文 AI 语音输入工具</h1>
 
-</p>
-<h2 align="center">如果有帮到你，麻烦动动小手点亮STAR ✨✨</h2>
+<p align="center">
+  按下全局快捷键说话，把中文口述整理成去口头语、可分段和结构化的文字，再插入当前光标。
 </p>
 
 <p align="center">
-  面向 Windows 职场用户的中文 AI 语音输入工具：按全局快捷键说话，把中文语音转文字，去口头语并润色成结构化文本，插入当前光标。
-</p>
-
-<p align="center">
-  搜索意图：<strong>OpenLess 改造版</strong>、<strong>OpenLess 中文版</strong>、<strong>Typeless 平替</strong>、<strong>开源 Typeless</strong>、<strong>typeless-alternative</strong>、<strong>Windows 语音输入</strong>、<strong>职场语音输入</strong>、<strong>中文转英文语音输入</strong>。
+  面向需要在聊天、写作、工作说明、任务拆解或英文输出中快速获得可用文字的 Windows 用户。
 </p>
 
 <p align="center">
@@ -44,7 +40,7 @@
 
 它只做一件事：**你按下快捷键说话，它把你的口语整理成自然、正式、结构清楚的文字，并插入到当前光标位置。** 如果直接插入失败，会自动复制到剪贴板兜底。
 
-Typeless 平替 ：用开源方式实现类似“按住说话、松开得到润色文字”的工作流，并更聚焦中文职场表达。
+它适合聊天、写作、工作说明、任务拆解和中文口述后输出英文等场景；重点是把口述变成可直接使用的文字，而不只是生成原始转写。
 
 适合这些场景：
 
