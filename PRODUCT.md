@@ -17,7 +17,7 @@
 
 ## Product Contracts
 
-- Windows v1.4.0 and v1.5.0 scope is owned by the [Windows core iteration spec](.scratch/windows-core-iterations/spec.md).
+- Selection polish, history-derived actions, streaming diagnostics, and style packs are supported product capabilities; their runtime contracts live in the owning modules and tests.
 - Structured diagnostics follow the [diagnostic observability contract](docs/superpowers/specs/2026-05-21-diagnostic-observability-design.md).
 - LLM correction follows the [conservative ASR correction contract](docs/superpowers/specs/2026-05-24-asr-contextual-correction-design.md).
 - Iteration-specific restrictions belong in their versioned spec, not in this stable product context.

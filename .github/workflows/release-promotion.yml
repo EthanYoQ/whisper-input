@@ -130,13 +130,14 @@ jobs:
           RELEASE_TAG: ${{ steps.contract.outputs.release_tag }}
         run: |
           set -euo pipefail
+          version="${RELEASE_TAG#v}"
           cat > release-notes.zh-CN.md <<'EOF'
           ## 下载
 
-          - **macOS（Apple 芯片，M1 及更新机型）**：`Whisper_Input_1.3.34_arm64.dmg`
-          - **Windows x64 安装程序**：`Whisper_Input_1.3.34_x64_setup.exe`
-          - **Windows x64 MSI 安装包**：`Whisper_Input_1.3.34_x64_en-US.msi`
-          - **Windows x64 便携版**：`Whisper_Input_1.3.34_x64_portable.zip`
+          - **macOS（Apple 芯片，M1 及更新机型）**：`Whisper_Input___VERSION___arm64.dmg`
+          - **Windows x64 安装程序**：`Whisper_Input___VERSION___x64_setup.exe`
+          - **Windows x64 MSI 安装包**：`Whisper_Input___VERSION___x64_en-US.msi`
+          - **Windows x64 便携版**：`Whisper_Input___VERSION___x64_portable.zip`
 
           同一版本的 macOS 与 Windows 文件都在本 Release 的“Assets”列表中；每个文件旁都有对应的 SHA-256 校验文件。
 
@@ -148,8 +149,14 @@ jobs:
 
           ## 更新范围
 
-          这个列表统一展示 GitHub Release 下载文件，不代表已新增或验证应用内自动更新。请在更新时下载与自己系统匹配的文件。
+          - 新增选区润色的预览确认与安全替换。
+          - 历史记录支持重新润色和重新插入。
+          - 流式输入增加一致性降级与本地诊断。
+          - 新增本地自定义风格包，并重新设计输入风格工作区与输出示例。
+
+          这个列表统一展示 GitHub Release 下载文件，不代表已新增或验证应用内自动更新。请下载与自己系统匹配的文件。
           EOF
+          sed -i "s/__VERSION__/$version/g" release-notes.zh-CN.md
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             : > promotion-evidence/missing-release-assets.txt
             while IFS= read -r asset; do
