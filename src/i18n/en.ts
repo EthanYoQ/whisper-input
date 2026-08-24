@@ -299,6 +299,12 @@ export const en: typeof zhCN = {
     previewTitle: 'Preview before saving', previewDisclosure: 'The preview text, current draft, and style examples are sent to the configured model provider. Nothing is saved, activated, inserted, or added to history.',
     previewDictation: 'Dictation preview', previewSelection: 'Selection-polish preview', previewDefaultInput: 'Rewrite this text for clear workplace communication',
     previewAction: 'Preview with current model', previewResult: 'Preview result', importFile: 'Import file',
+    custom: 'Custom', manage: 'Manage', inputExample: 'Input example', outputEffect: 'Output effect', savedExample: 'Saved example', transientPreview: 'Just generated',
+    previewEmptyTitle: 'No effect preview has been generated for this style', generatePreview: 'Generate with current model',
+    previewPrivacy: 'The example is sent to the current model provider but is not added to dictation history.', previewSaveHint: 'If it looks right, save this result as the style display example.',
+    useStyle: 'Use this style', saveAsExample: 'Save as display example', regeneratePreview: 'Generate again', disabledNote: 'This style is currently disabled',
+    selectorLabel: 'Style selector', builtinStyles: 'Built-in styles', myStyles: 'My styles', noCustomStyles: 'No custom styles yet. Use the button above to create one.',
+    detailLabel: 'Style details', editorDescription: 'Configure prompts and examples, then verify the result with the current model before saving.', baseMode: 'Base mode', savedExampleTitle: 'Effect preview',
     errors: {
       stylePackReadonlyOrNotFound: 'This style is read-only or no longer exists.', stylePackNotFound: 'The style pack was not found.',
       stylePackBuiltinReadonly: 'Built-in styles are read-only. Duplicate one before editing it.', stylePackDisabled: 'Enable this style before using it.',

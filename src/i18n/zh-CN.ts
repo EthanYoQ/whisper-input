@@ -297,6 +297,12 @@ export const zhCN = {
     previewTitle: '保存前预览', previewDisclosure: '预览文本、当前草稿和风格示例会发送给当前配置的模型服务商；不会保存、激活、插入或写入历史。',
     previewDictation: '听写预览', previewSelection: '选区润色预览', previewDefaultInput: '请把这段文字整理成适合工作沟通的表达',
     previewAction: '调用当前模型预览', previewResult: '预览结果', importFile: '导入文件',
+    custom: '自建', manage: '管理', inputExample: '输入示例', outputEffect: '输出效果', savedExample: '已保存示例', transientPreview: '刚刚生成',
+    previewEmptyTitle: '尚未生成该风格的效果预览', generatePreview: '调用当前模型生成预览',
+    previewPrivacy: '示例文本会发送给当前模型服务商，但不会写入听写历史。', previewSaveHint: '满意后可将本次结果保存为该风格的展示示例。',
+    useStyle: '使用此风格', saveAsExample: '保存为展示示例', regeneratePreview: '重新生成', disabledNote: '此风格当前未启用',
+    selectorLabel: '风格选择器', builtinStyles: '内置风格', myStyles: '我的风格', noCustomStyles: '还没有自建风格，点击上方按钮开始创建。',
+    detailLabel: '风格详情', editorDescription: '配置提示词与示例，并在保存前调用当前模型验证效果。', baseMode: '基础模式', savedExampleTitle: '效果预览',
     errors: {
       stylePackReadonlyOrNotFound: '该风格为只读或已不存在。', stylePackNotFound: '未找到该风格包。',
       stylePackBuiltinReadonly: '内置风格为只读，请先复制后再编辑。', stylePackDisabled: '请先启用该风格再使用。',
