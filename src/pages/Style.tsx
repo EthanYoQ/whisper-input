@@ -13,7 +13,7 @@ import {
   setStylePackEnabled,
   updateStylePack,
 } from '../lib/ipc';
-import { resolveStyleDemo } from '../lib/stylePresentation';
+import { resolveStyleDemo, stylePackActionAvailability } from '../lib/stylePresentation';
 import type {
   PolishMode,
   StylePack,
@@ -390,6 +390,7 @@ export function Style() {
 
   const selectedEnabled = catalog.enabledStyleIds.includes(selected.id);
   const selectedActive = catalog.activeStyleId === selected.id;
+  const selectedActions = stylePackActionAvailability(selected.kind);
 
   return (
     <div className="wi-style-page">
@@ -437,7 +438,7 @@ export function Style() {
               </div>
             </div>
             <div className="wi-style-detail-actions">
-              {selected.kind === 'custom' && (
+              {selectedActions.canEdit && (
                 <PreviewButton onClick={() => openEditor(selected)}>
                   <Icon name="settings" size={15} /> {t('stylePacks.edit')}
                 </PreviewButton>
@@ -458,16 +459,16 @@ export function Style() {
                     <button type="button" role="menuitem" disabled={busy} onClick={() => void exportToFile(selected)}>
                       <Icon name="doc" size={15} /> {t('stylePacks.saveFile')}
                     </button>
-                    {selected.kind === 'custom' && (
-                      <>
+                    {selectedActions.canToggle && (
                         <button type="button" role="menuitem" disabled={busy} onClick={() => void mutate(() => setStylePackEnabled(selected.id, !selectedEnabled))}>
                           <Icon name={selectedEnabled ? 'x' : 'check'} size={15} />
                           {t(selectedEnabled ? 'stylePacks.disable' : 'stylePacks.enable')}
                         </button>
+                    )}
+                    {selectedActions.canDelete && (
                         <button type="button" role="menuitem" className="wi-style-menu-danger" disabled={busy} onClick={() => void removeSelected()}>
                           <Icon name="trash" size={15} /> {t('common.delete')}
                         </button>
-                      </>
                     )}
                   </div>
                 )}

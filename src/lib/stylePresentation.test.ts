@@ -1,4 +1,4 @@
-import { resolveStyleDemo } from './stylePresentation';
+import { resolveStyleDemo, stylePackActionAvailability } from './stylePresentation';
 import type { StylePack } from './types';
 
 function assertDeepEqual(actual: unknown, expected: unknown) {
@@ -33,6 +33,18 @@ assertDeepEqual(demo, {
   source: 'builtin',
   input: 'raw spoken input',
   output: 'trusted built-in output',
+});
+
+assertDeepEqual(stylePackActionAvailability('builtin'), {
+  canEdit: false,
+  canToggle: true,
+  canDelete: false,
+});
+
+assertDeepEqual(stylePackActionAvailability('custom'), {
+  canEdit: true,
+  canToggle: true,
+  canDelete: true,
 });
 
 const savedCustomPack: StylePack = {

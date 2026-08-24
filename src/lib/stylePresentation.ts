@@ -11,6 +11,22 @@ export interface TransientStylePreview {
   output: string;
 }
 
+export interface StylePackActionAvailability {
+  canEdit: boolean;
+  canToggle: boolean;
+  canDelete: boolean;
+}
+
+export function stylePackActionAvailability(
+  kind: StylePack['kind'],
+): StylePackActionAvailability {
+  return {
+    canEdit: kind === 'custom',
+    canToggle: true,
+    canDelete: kind === 'custom',
+  };
+}
+
 export function resolveStyleDemo(
   pack: StylePack,
   builtinInput: string,

@@ -191,11 +191,8 @@ impl StylePackStore {
     }
 
     pub fn set_enabled(&self, id: &str, enabled: bool) -> Result<()> {
-        if is_builtin_id(id) {
-            return Err(anyhow!("stylePackBuiltinReadonly"));
-        }
         self.mutate(|catalog| {
-            if !catalog.custom_packs.iter().any(|pack| pack.id == id) {
+            if !all_ids(catalog).iter().any(|item| item == id) {
                 return Err(anyhow!("stylePackNotFound"));
             }
             if enabled {
@@ -638,17 +635,25 @@ mod tests {
     }
 
     #[test]
-    fn builtin_lifecycle_is_readonly_but_duplicate_is_allowed() {
+    fn builtin_content_is_readonly_while_enablement_is_mutable() {
         let dir = test_scratch_dir("builtin");
         let store =
             StylePackStore::with_dir_for_tests(dir.clone(), &UserPreferences::default()).unwrap();
-        assert_eq!(
-            store
-                .set_enabled(BUILTIN_LIGHT_ID, false)
-                .unwrap_err()
-                .to_string(),
-            "stylePackBuiltinReadonly"
-        );
+        store.activate(BUILTIN_FORMAL_ID).unwrap();
+        store.set_enabled(BUILTIN_FORMAL_ID, false).unwrap();
+        let disabled = store.snapshot();
+        assert_eq!(disabled.active_style_id, BUILTIN_LIGHT_ID);
+        assert!(!disabled
+            .enabled_style_ids
+            .iter()
+            .any(|id| id == BUILTIN_FORMAL_ID));
+
+        store.set_enabled(BUILTIN_FORMAL_ID, true).unwrap();
+        assert!(store
+            .snapshot()
+            .enabled_style_ids
+            .iter()
+            .any(|id| id == BUILTIN_FORMAL_ID));
         assert_eq!(
             store.delete(BUILTIN_LIGHT_ID).unwrap_err().to_string(),
             "stylePackBuiltinReadonly"
