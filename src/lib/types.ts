@@ -3,8 +3,49 @@
 // PolishMode is an exception — Rust uses lowercase serialization.
 
 export type PolishMode = 'raw' | 'light' | 'structured' | 'formal';
+export type SelectionPolishOutputMode = 'directReplace' | 'previewConfirm';
+export type StylePackKind = 'builtin' | 'custom';
+export type StylePreviewKind = 'dictation' | 'selection';
+
+export interface StylePackExample {
+  title: string;
+  input: string;
+  output: string;
+}
+
+export interface StylePackDraft {
+  name: string;
+  description: string;
+  baseMode: PolishMode;
+  dictationPrompt: string;
+  selectionPrompt: string;
+  examples: StylePackExample[];
+}
+
+export interface StylePack extends StylePackDraft {
+  id: string;
+  kind: StylePackKind;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StylePackCatalogSnapshot {
+  packs: StylePack[];
+  activeStyleId: string;
+  enabledStyleIds: string[];
+}
+
+export interface SelectionPolishStatePayload {
+  kind: 'processing' | 'ready' | 'error';
+  requestId?: string | null;
+  result?: string | null;
+  sourceApp?: string | null;
+  errorCode?: string | null;
+  insertStatus?: InsertStatus | null;
+}
 
 export type InsertStatus = 'inserted' | 'pasteSent' | 'copiedFallback' | 'failed';
+export type HistoryAction = 'repolish' | 'reinsert';
 
 export interface DictationSession {
   id: string;
@@ -20,6 +61,8 @@ export interface DictationSession {
   dictionaryEntryCount: number | null;
   asrProviderId?: string | null;
   llmProviderId?: string | null;
+  historyAction?: HistoryAction | null;
+  sourceSessionId?: string | null;
 }
 
 export interface DictionaryEntry {
@@ -175,6 +218,9 @@ export interface UserPreferences {
   outputLanguagePreferenceExplicit: boolean;
   /** 划词语音问答快捷键。null = 未启用。详见 issue #118。 */
   qaHotkey: QaHotkeyBinding | null;
+  /** 选区润色快捷键。null = 未启用。 */
+  selectionPolishHotkey: ShortcutBinding | null;
+  selectionPolishOutputMode: SelectionPolishOutputMode;
   /** 全局历史记录开关。关闭后不再向本地历史追加新条目。 */
   historyEnabled: boolean;
   /** 是否把 Q&A 历史写到本地存档。详见 issue #118。 */

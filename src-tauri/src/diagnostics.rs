@@ -88,6 +88,8 @@ pub struct DiagnosticLlm {
     pub mode: Option<String>,
     pub short_input_bypass: bool,
     pub streaming_insert_eligible: bool,
+    #[serde(default)]
+    pub streaming_fallback_reason: Option<String>,
     pub started_at_ms: Option<u64>,
     pub finished_at_ms: Option<u64>,
     pub error: Option<String>,
@@ -511,6 +513,7 @@ mod tests {
                 mode: Some("Light".into()),
                 short_input_bypass: false,
                 streaming_insert_eligible: true,
+                streaming_fallback_reason: None,
                 started_at_ms: Some(29200),
                 finished_at_ms: Some(32900),
                 error: None,
@@ -685,6 +688,8 @@ mod tests {
             dictionary_entry_count: Some(0),
             asr_provider_id: Some("doubao-streaming-asr-2".into()),
             llm_provider_id: Some("gemini".into()),
+            history_action: None,
+            source_session_id: None,
         }];
         let bundle = DiagnosticBundle::new(
             traces,

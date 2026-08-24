@@ -32,6 +32,7 @@ const tauriConfig = JSON.parse(
 ) as { app: { windows: Array<{ label: string; decorations?: boolean; shadow?: boolean }> } };
 const pageContainerSource = readFileSync(new URL('../components/shell/PageContainer.tsx', import.meta.url), 'utf8');
 const previewCssSource = readFileSync(new URL('../styles/preview-replica.css', import.meta.url), 'utf8');
+const styleCssSource = readFileSync(new URL('../styles/style-page.css', import.meta.url), 'utf8');
 const ipcSource = readFileSync(new URL('../lib/ipc.ts', import.meta.url), 'utf8');
 const zhCnSource = readFileSync(new URL('../i18n/zh-CN.ts', import.meta.url), 'utf8');
 
@@ -64,13 +65,13 @@ assert(
 );
 
 assert(
-  HISTORY_ROW_ACTION_LABELS.join(',') === '复制,删除',
-  `history row actions should only expose copy/delete, got ${HISTORY_ROW_ACTION_LABELS.join(',')}`,
+  HISTORY_ROW_ACTION_LABELS.join(',') === '重新润色,重新插入,复制,删除',
+  `history row actions should expose derived actions plus copy/delete, got ${HISTORY_ROW_ACTION_LABELS.join(',')}`,
 );
 
 assert(
-  FORBIDDEN_HISTORY_ACTIONS.includes('重新润色'),
-  '历史页必须禁止重新润色',
+  FORBIDDEN_HISTORY_ACTIONS.length === 0,
+  'approved history actions must not remain forbidden',
 );
 
 for (const label of FORBIDDEN_HISTORY_ACTIONS) {
@@ -255,10 +256,47 @@ assert(
 );
 
 assert(
-  styleSource.includes('wi-style-header-row') &&
-    styleSource.includes('wi-style-master') &&
-    !styleSource.includes('actions={\n          <div className="wi-style-master">'),
-  '输出风格整体启用开关必须并入标题说明行，不能继续作为孤立的页头操作',
+  styleSource.includes('wi-style-browser') &&
+    styleSource.includes('wi-style-detail') &&
+    styleSource.includes('resolveStyleDemo') &&
+    styleSource.includes('stylePacks.previewEmptyTitle') &&
+    styleCssSource.includes('grid-template-columns: minmax(288px, 0.82fr) minmax(0, 1.55fr);') &&
+    styleCssSource.includes('overflow-y: auto;'),
+  '输出风格必须保持左侧独立滚动选择器与右侧详情布局，并为无示例的自建风格显示真实空预览状态',
+);
+
+assert(
+  !styleSource.includes('await setStylePackEnabled(selected.id, true)') &&
+    styleSource.includes('disabled={busy || !selectedEnabled} onClick={() => void activateSelected()}'),
+  '停用的风格必须先由用户显式启用，使用按钮不能静默改变启用状态',
+);
+
+assert(
+  styleCssSource.includes('.wi-style-menu button {') &&
+    styleCssSource.includes('min-height: 40px;') &&
+    styleCssSource.includes('width: 40px;') &&
+    styleCssSource.includes('height: 40px;'),
+  '输出风格菜单项和图标按钮必须满足至少 40px 的操作目标',
+);
+
+assert(
+  styleSource.includes('handleEditorKeyDown') &&
+    styleSource.includes("event.key === 'Escape'") &&
+    styleSource.includes("event.key !== 'Tab'") &&
+    styleSource.includes('editorNameRef.current?.focus()') &&
+    styleSource.includes('returnFocusRef.current?.focus()'),
+  '自定义风格编辑器必须支持打开聚焦、Tab 焦点约束、Escape 关闭和关闭后焦点恢复',
+);
+
+assert(
+  styleSource.includes('examples: [nextExample, ...selected.examples.slice(1)]'),
+  '保存展示示例必须替换首条展示样例，不能在重复生成时无界累加',
+);
+
+assert(
+  styleSource.includes("const selectedPrimaryExampleInput = selected?.kind === 'custom'") &&
+    styleSource.includes('selectedPrimaryExampleInput, t]'),
+  '编辑当前自建风格的首条示例后，详情页必须立即同步已保存的展示输入',
 );
 
 assert(

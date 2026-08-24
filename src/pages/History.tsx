@@ -13,7 +13,13 @@ import {
 } from '../components/preview/PreviewPrimitives';
 import { detectOS } from '../components/WindowChrome';
 import { formatComboLabel } from '../lib/hotkey';
-import { clearHistory, deleteHistoryEntry, listHistory } from '../lib/ipc';
+import {
+  clearHistory,
+  deleteHistoryEntry,
+  listHistory,
+  repolishHistoryEntry,
+  reinsertHistoryEntry,
+} from '../lib/ipc';
 import {
   DOUBAO_ASR_PROVIDER_ID,
   DOUBAO_LLM_PROVIDER_ID,
@@ -109,6 +115,8 @@ export function History() {
   const [clearing, setClearing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [transientResult, setTransientResult] = useState<DictationSession | null>(null);
   const refreshSeqRef = useRef(0);
   const { prefs } = useHotkeySettings();
 
@@ -173,6 +181,7 @@ export function History() {
       await clearHistory();
       if (refreshSeqRef.current !== seq) return;
       setItems([]);
+      setTransientResult(null);
       setLoadError(null);
     } catch (error) {
       if (refreshSeqRef.current !== seq) return;
@@ -210,6 +219,27 @@ export function History() {
     }
   };
 
+  const onDerivedAction = async (
+    session: DictationSession,
+    action: 'repolish' | 'reinsert',
+  ) => {
+    const actionKey = `${session.id}:${action}`;
+    setActiveAction(actionKey);
+    setActionError(null);
+    try {
+      const derived = action === 'repolish'
+        ? await repolishHistoryEntry(session.id)
+        : await reinsertHistoryEntry(session.id);
+      if (prefs?.historyEnabled) setItems(previous => [derived, ...previous]);
+      else setTransientResult(derived);
+    } catch (error) {
+      console.error(`[history] ${action} failed`, error);
+      setActionError(t('common.operationFailed', { error: errorMessage(error) }));
+    } finally {
+      setActiveAction(null);
+    }
+  };
+
   return (
     <div className="wi-history-page">
       <PreviewPageHeader
@@ -244,6 +274,19 @@ export function History() {
       </div>
 
       {actionError && <div className="wi-history-error">{actionError}</div>}
+
+      {transientResult && (
+        <PreviewCard className="wi-history-transient-result">
+          <div>
+            <PreviewPill>{t('history.notSaved')}</PreviewPill>
+            <div className="wi-history-cell-text">{transientResult.finalText}</div>
+          </div>
+          <div className="wi-history-actions">
+            <PreviewButton onClick={() => void onCopy(transientResult)}>{t('common.copy')}</PreviewButton>
+            <PreviewButton onClick={() => setTransientResult(null)}>{t('common.close')}</PreviewButton>
+          </div>
+        </PreviewCard>
+      )}
 
       <PreviewCard className="wi-table-card">
         <table className="wi-table">
@@ -314,11 +357,25 @@ export function History() {
                 </td>
                 <td>
                   <PreviewPill tone={statusTone(session.insertStatus)}>
-                    {insertStatusLabel(session.insertStatus, t, os)}
+                    {session.historyAction === 'repolish'
+                      ? t('history.generatedResult')
+                      : insertStatusLabel(session.insertStatus, t, os)}
                   </PreviewPill>
                 </td>
                 <td>
                   <div className="wi-history-actions">
+                    <PreviewButton
+                      disabled={activeAction !== null}
+                      onClick={() => void onDerivedAction(session, 'repolish')}
+                    >
+                      {t('history.repolish')}
+                    </PreviewButton>
+                    <PreviewButton
+                      disabled={activeAction !== null}
+                      onClick={() => void onDerivedAction(session, 'reinsert')}
+                    >
+                      {t('history.reinsert')}
+                    </PreviewButton>
                     <PreviewButton onClick={() => void onCopy(session)}>{t('common.copy')}</PreviewButton>
                     <PreviewButton variant="danger" onClick={() => void onDelete(session)}>{t('common.delete')}</PreviewButton>
                   </div>

@@ -33,8 +33,9 @@ use crate::polish::{
 use crate::recorder::{AudioConsumer, Recorder};
 use crate::types::{
     ChineseScriptPreference, ComboBinding, CorrectionRule, CredentialsStatus, DictationSession,
-    DictionaryEntry, HotkeyCapability, HotkeyStatus, OutputLanguagePreference, PolishMode,
-    ShortcutBinding, UpdateChannel, UsageStats, UserPreferences, VocabPresetStore,
+    DictionaryEntry, HotkeyCapability, HotkeyStatus, InsertStatus, OutputLanguagePreference,
+    PolishMode, SelectionPolishOutputMode, ShortcutBinding, StylePackCatalogSnapshot,
+    StylePackDraft, StylePreviewKind, UpdateChannel, UsageStats, UserPreferences, VocabPresetStore,
     WindowsImeStatus,
 };
 
@@ -64,7 +65,7 @@ impl AudioConsumer for LevelProbeConsumer {
 
 #[tauri::command]
 pub fn get_settings(coord: CoordinatorState<'_>) -> UserPreferences {
-    coord.prefs().get()
+    coord.settings_snapshot()
 }
 
 trait SettingsWriter {
@@ -75,6 +76,7 @@ trait SettingsWriter {
     fn refresh_translation_hotkey(&self);
     fn refresh_switch_style_hotkey(&self);
     fn refresh_open_app_hotkey(&self);
+    fn refresh_selection_polish_hotkey(&self) {}
 }
 
 impl SettingsWriter for Coordinator {
@@ -104,6 +106,10 @@ impl SettingsWriter for Coordinator {
 
     fn refresh_open_app_hotkey(&self) {
         self.update_open_app_hotkey_binding();
+    }
+
+    fn refresh_selection_polish_hotkey(&self) {
+        self.update_selection_polish_hotkey_binding();
     }
 }
 
@@ -135,6 +141,10 @@ impl<T: SettingsWriter + ?Sized> SettingsWriter for Arc<T> {
     fn refresh_open_app_hotkey(&self) {
         (**self).refresh_open_app_hotkey();
     }
+
+    fn refresh_selection_polish_hotkey(&self) {
+        (**self).refresh_selection_polish_hotkey();
+    }
 }
 
 fn persist_settings<T: SettingsWriter>(
@@ -150,6 +160,7 @@ fn persist_settings<T: SettingsWriter>(
     coord.refresh_translation_hotkey();
     coord.refresh_switch_style_hotkey();
     coord.refresh_open_app_hotkey();
+    coord.refresh_selection_polish_hotkey();
     Ok(())
 }
 
@@ -158,16 +169,23 @@ fn reset_provider_preferences_to_defaults(prefs: &mut UserPreferences) {
     prefs.active_llm_provider = crate::product::DEFAULT_LLM_PROVIDER_ID.into();
 }
 
+fn preserve_legacy_style_fields(incoming: &mut UserPreferences, persisted: &UserPreferences) {
+    incoming.default_mode = persisted.default_mode;
+    incoming.enabled_modes = persisted.enabled_modes.clone();
+}
+
 #[tauri::command]
 pub fn set_settings(
     coord: CoordinatorState<'_>,
     app: AppHandle,
     tray_microphones: State<'_, TrayMicrophoneMenuState>,
-    prefs: UserPreferences,
+    mut prefs: UserPreferences,
 ) -> Result<(), String> {
     // 广播给所有 webview。issue #205：QaPanel 跑在独立 webview，
     // 没有 HotkeySettingsContext，必须靠事件感知录音键变化，否则面板可见时
     // 用户改键会让浮窗里的 "{recordHotkey}" 文案一直停留在旧值。
+    let persisted_prefs = coord.prefs().get();
+    preserve_legacy_style_fields(&mut prefs, &persisted_prefs);
     persist_settings(&*coord, prefs.clone())?;
     // refresh_tray_microphone_menu 内部会调用 NSStatusItem.set_menu，必须在主线程上跑。
     // set_settings 本身是同步 Tauri command，在 IPC handler 线程上执行；从这里直接调
@@ -188,20 +206,16 @@ pub fn set_settings(
     // 抑制 unused 警告：tray_microphones 现在改在闭包里通过 app.state 取，
     // 但函数签名保留 State 入参，以便 Tauri 在调用前注入。
     let _ = tray_microphones;
-    let _ = app.emit("prefs:changed", &prefs);
+    let visible_prefs = coord.settings_snapshot();
+    let _ = app.emit("prefs:changed", &visible_prefs);
     Ok(())
 }
 
 // ─────────────────────────── release channel (Beta opt-in) ───────────────────────────
 //
-// 渠道偏好的写入路径跟 set_settings 复用 persist_settings：保持热键兜底归一化
-// 跟其他 prefs 写入一致，且写完后 emit "prefs:changed"，让前端跨 webview 同步。
-//
-// 注意：plugin-updater 2.10 的 Builder 不暴露 endpoints() 运行时 API，因此切到 Beta
-// 渠道**不会**改变 in-app「检查更新」的行为——它仍然只看正式版 manifest。Beta 用户
-// 通过 `fetch_latest_beta_release` 获取最新 prerelease，由前端跳浏览器手动下载，
-// 物理隔离 Beta 包不会通过 auto-update 推到正式版用户。详见 PR-B-2 description 与
-// CLAUDE.md `Branch & release-channel workflow` 段落。
+// 渠道偏好复用设置持久化与 `prefs:changed`，保持跨 webview 同步。
+// 内置 updater 只读取正式版 manifest；Beta 检查读取 prerelease，并交给浏览器下载，
+// 因此 Beta 包不会通过自动更新进入正式版渠道。
 
 #[tauri::command]
 pub fn get_update_channel(coord: CoordinatorState<'_>) -> UpdateChannel {
@@ -1402,6 +1416,22 @@ pub fn clear_history(coord: CoordinatorState<'_>) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn repolish_history_entry(
+    coord: CoordinatorState<'_>,
+    history_id: String,
+) -> Result<DictationSession, String> {
+    coord.repolish_history_entry(history_id).await
+}
+
+#[tauri::command]
+pub fn reinsert_history_entry(
+    coord: CoordinatorState<'_>,
+    history_id: String,
+) -> Result<DictationSession, String> {
+    coord.reinsert_history_entry(history_id)
+}
+
+#[tauri::command]
 pub fn clear_local_cache() -> Result<(), String> {
     Ok(())
 }
@@ -1555,16 +1585,30 @@ pub async fn inject_hotkey_click_for_dev(coord: CoordinatorState<'_>) -> Result<
     coord.inject_hotkey_click_for_dev().await
 }
 
-#[tauri::command]
-pub async fn repolish(
-    coord: CoordinatorState<'_>,
-    raw_text: String,
-    mode: PolishMode,
-) -> Result<String, String> {
-    coord.repolish(raw_text, mode).await
+// ─────────────────────────── local style packs ───────────────────────────
+
+fn publish_style_change(
+    coord: &Coordinator,
+    app: &AppHandle,
+) -> Result<StylePackCatalogSnapshot, String> {
+    let prefs = coord.settings_snapshot();
+    let app_for_main = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Err(error) = crate::refresh_tray_microphone_menu(&app_for_main) {
+            log::warn!("[tray] refresh style menu failed: {error}");
+        }
+    });
+    let snapshot = coord.style_packs().snapshot();
+    let _ = app.emit("prefs:changed", &prefs);
+    let _ = app.emit_to("main", "prefs:changed", &prefs);
+    let _ = app.emit("style-packs:changed", &snapshot);
+    Ok(snapshot)
 }
 
-// ─────────────────────────── style toggles (lightweight) ───────────────────────────
+#[tauri::command]
+pub fn list_style_packs(coord: CoordinatorState<'_>) -> StylePackCatalogSnapshot {
+    coord.style_packs().snapshot()
+}
 
 #[tauri::command]
 pub fn set_default_polish_mode(
@@ -1572,40 +1616,150 @@ pub fn set_default_polish_mode(
     app: AppHandle,
     mode: PolishMode,
 ) -> Result<(), String> {
-    let mut prefs = coord.prefs().get();
-    prefs.default_mode = mode;
     coord
-        .prefs()
-        .set(prefs.clone())
-        .map_err(|e| e.to_string())?;
-    // 跟 set_settings 同样：refresh_tray_microphone_menu 里 tray.set_menu 改 NSStatusItem，
-    // 必须主线程；这里是同步 Tauri command 跑在 IPC 线程，直调会让 macOS 死锁。
-    let app_for_main = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        if let Err(err) = crate::refresh_tray_microphone_menu(&app_for_main) {
-            log::warn!("[tray] refresh style menu after polish mode IPC change failed: {err}");
-        }
-    });
-    let _ = app.emit("prefs:changed", &prefs);
-    let _ = app.emit_to("main", "prefs:changed", &prefs);
+        .style_packs()
+        .activate(crate::style_packs::StylePackStore::builtin_id_for_mode(
+            mode,
+        ))
+        .map_err(|error| error.to_string())?;
+    publish_style_change(&coord, &app)?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn set_style_enabled(
     coord: CoordinatorState<'_>,
+    app: AppHandle,
     mode: PolishMode,
     enabled: bool,
 ) -> Result<(), String> {
-    let mut prefs = coord.prefs().get();
-    if enabled {
-        if !prefs.enabled_modes.contains(&mode) {
-            prefs.enabled_modes.push(mode);
-        }
-    } else {
-        prefs.enabled_modes.retain(|m| *m != mode);
-    }
-    coord.prefs().set(prefs).map_err(|e| e.to_string())
+    coord
+        .style_packs()
+        .set_enabled(
+            crate::style_packs::StylePackStore::builtin_id_for_mode(mode),
+            enabled,
+        )
+        .map_err(|error| error.to_string())?;
+    publish_style_change(&coord, &app)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn create_style_pack(
+    coord: CoordinatorState<'_>,
+    app: AppHandle,
+    draft: StylePackDraft,
+) -> Result<StylePackCatalogSnapshot, String> {
+    coord
+        .style_packs()
+        .create(draft)
+        .map_err(|error| error.to_string())?;
+    publish_style_change(&coord, &app)
+}
+
+#[tauri::command]
+pub fn update_style_pack(
+    coord: CoordinatorState<'_>,
+    app: AppHandle,
+    id: String,
+    draft: StylePackDraft,
+) -> Result<StylePackCatalogSnapshot, String> {
+    coord
+        .style_packs()
+        .update(&id, draft)
+        .map_err(|error| error.to_string())?;
+    publish_style_change(&coord, &app)
+}
+
+#[tauri::command]
+pub fn duplicate_style_pack(
+    coord: CoordinatorState<'_>,
+    app: AppHandle,
+    id: String,
+) -> Result<StylePackCatalogSnapshot, String> {
+    coord
+        .style_packs()
+        .duplicate(&id)
+        .map_err(|error| error.to_string())?;
+    publish_style_change(&coord, &app)
+}
+
+#[tauri::command]
+pub fn set_style_pack_enabled(
+    coord: CoordinatorState<'_>,
+    app: AppHandle,
+    id: String,
+    enabled: bool,
+) -> Result<StylePackCatalogSnapshot, String> {
+    coord
+        .style_packs()
+        .set_enabled(&id, enabled)
+        .map_err(|error| error.to_string())?;
+    publish_style_change(&coord, &app)
+}
+
+#[tauri::command]
+pub fn activate_style_pack(
+    coord: CoordinatorState<'_>,
+    app: AppHandle,
+    id: String,
+) -> Result<StylePackCatalogSnapshot, String> {
+    coord
+        .style_packs()
+        .activate(&id)
+        .map_err(|error| error.to_string())?;
+    publish_style_change(&coord, &app)
+}
+
+#[tauri::command]
+pub fn delete_style_pack(
+    coord: CoordinatorState<'_>,
+    app: AppHandle,
+    id: String,
+) -> Result<StylePackCatalogSnapshot, String> {
+    coord
+        .style_packs()
+        .delete(&id)
+        .map_err(|error| error.to_string())?;
+    publish_style_change(&coord, &app)
+}
+
+#[tauri::command]
+pub fn import_style_pack_file(
+    coord: CoordinatorState<'_>,
+    app: AppHandle,
+    source_path: String,
+) -> Result<StylePackCatalogSnapshot, String> {
+    let json =
+        std::fs::read_to_string(source_path).map_err(|_| "stylePackFileReadFailed".to_string())?;
+    coord
+        .style_packs()
+        .import(&json)
+        .map_err(|error| error.to_string())?;
+    publish_style_change(&coord, &app)
+}
+
+#[tauri::command]
+pub fn export_style_pack_file(
+    coord: CoordinatorState<'_>,
+    id: String,
+    target_path: String,
+) -> Result<(), String> {
+    let json = coord
+        .style_packs()
+        .export(&id)
+        .map_err(|error| error.to_string())?;
+    std::fs::write(target_path, json).map_err(|_| "stylePackFileWriteFailed".to_string())
+}
+
+#[tauri::command]
+pub async fn preview_style_pack(
+    coord: CoordinatorState<'_>,
+    draft: StylePackDraft,
+    input: String,
+    kind: StylePreviewKind,
+) -> Result<String, String> {
+    coord.preview_style_pack(draft, input, kind).await
 }
 
 // ─────────────────────────── 系统权限 ───────────────────────────
@@ -1755,6 +1909,49 @@ pub fn qa_window_dismiss(coord: CoordinatorState<'_>) {
 #[tauri::command]
 pub fn qa_window_pin(coord: CoordinatorState<'_>, pinned: bool) {
     coord.qa_window_pin(pinned);
+}
+
+// ─────────────────────────── 选区润色 ───────────────────────────
+
+#[tauri::command]
+pub async fn start_selection_polish(coord: CoordinatorState<'_>) -> Result<(), String> {
+    coord.start_selection_polish().await
+}
+
+#[tauri::command]
+pub fn cancel_selection_polish(coord: CoordinatorState<'_>) {
+    coord.cancel_selection_polish();
+}
+
+#[tauri::command]
+pub fn confirm_selection_polish(
+    coord: CoordinatorState<'_>,
+    replacement: String,
+) -> Result<InsertStatus, String> {
+    coord.confirm_selection_polish(replacement)
+}
+
+#[tauri::command]
+pub fn copy_selection_polish(coord: CoordinatorState<'_>, text: String) -> Result<(), String> {
+    coord.copy_selection_polish(text)
+}
+
+#[tauri::command]
+pub fn set_selection_polish_preferences(
+    coord: CoordinatorState<'_>,
+    binding: Option<ShortcutBinding>,
+    output_mode: SelectionPolishOutputMode,
+) -> Result<(), String> {
+    if let Some(binding) = binding.as_ref() {
+        crate::shortcut_binding::validate_binding(binding).map_err(|e| e.to_string())?;
+    }
+    let mut prefs = coord.prefs().get();
+    prefs.selection_polish_hotkey = binding;
+    prefs.selection_polish_output_mode = output_mode;
+    reject_hotkey_collisions(&prefs)?;
+    coord.prefs().set(prefs).map_err(|e| e.to_string())?;
+    coord.update_selection_polish_hotkey_binding();
+    Ok(())
 }
 
 // ─────────────────────────── 自定义组合键 ───────────────────────────
@@ -1969,6 +2166,31 @@ fn reject_hotkey_collisions(prefs: &UserPreferences) -> Result<(), String> {
         &prefs.switch_style_hotkey,
         &prefs.open_app_hotkey,
     )?;
+    if let Some(selection) = prefs.selection_polish_hotkey.as_ref() {
+        reject_hotkey_overlap(
+            selection,
+            &prefs.dictation_hotkey,
+            "选区润色快捷键不能和听写快捷键相同",
+        )?;
+        if let Some(qa) = prefs.qa_hotkey.as_ref() {
+            reject_hotkey_overlap(selection, qa, "选区润色快捷键不能和 QA 快捷键相同")?;
+        }
+        reject_hotkey_overlap(
+            selection,
+            &prefs.translation_hotkey,
+            "选区润色快捷键不能和翻译快捷键相同",
+        )?;
+        reject_hotkey_overlap(
+            selection,
+            &prefs.switch_style_hotkey,
+            "选区润色快捷键不能和切换风格快捷键相同",
+        )?;
+        reject_hotkey_overlap(
+            selection,
+            &prefs.open_app_hotkey,
+            "选区润色快捷键不能和打开应用快捷键相同",
+        )?;
+    }
     Ok(())
 }
 
@@ -3288,6 +3510,50 @@ mod tests {
             prefs.active_llm_provider,
             crate::product::DEFAULT_LLM_PROVIDER_ID
         );
+    }
+
+    #[test]
+    fn generic_settings_save_preserves_existing_legacy_style_fields() {
+        let mut incoming = UserPreferences {
+            default_mode: crate::types::PolishMode::Formal,
+            enabled_modes: vec![crate::types::PolishMode::Formal],
+            ..Default::default()
+        };
+        let persisted = UserPreferences {
+            default_mode: crate::types::PolishMode::Light,
+            enabled_modes: vec![
+                crate::types::PolishMode::Raw,
+                crate::types::PolishMode::Light,
+            ],
+            ..Default::default()
+        };
+
+        super::preserve_legacy_style_fields(&mut incoming, &persisted);
+
+        assert_eq!(incoming.default_mode, crate::types::PolishMode::Light);
+        assert_eq!(
+            incoming.enabled_modes,
+            vec![
+                crate::types::PolishMode::Raw,
+                crate::types::PolishMode::Light,
+            ]
+        );
+    }
+
+    #[test]
+    fn generic_settings_save_preserves_persisted_legacy_style_fields() {
+        let source = include_str!("commands.rs");
+        let start = source.find("pub fn set_settings(").unwrap();
+        let end = source[start..]
+            .find("// ─────────────────────────── release channel")
+            .map(|offset| start + offset)
+            .unwrap();
+        let body = &source[start..end];
+        let persist = body.find("persist_settings").unwrap();
+        let before_persist = &body[..persist];
+
+        assert!(before_persist.contains("coord.prefs().get()"));
+        assert!(!before_persist.contains("coord.settings_snapshot()"));
     }
 
     #[test]

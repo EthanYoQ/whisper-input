@@ -3,8 +3,8 @@
 ## Product Register
 
 - Register: Product UI
-- Platform: Windows desktop application built with Tauri and React
-- Primary users: Chinese-speaking workplace users who use voice input for daily writing and question answering
+- Platform: Windows-first desktop application built with Tauri and React; release assets also cover macOS arm64
+- Primary users: Chinese-speaking workplace users who use voice input for daily writing
 - Core purpose: turn speech into text, optionally polish or structure it with a configured LLM, and insert the result into the active application
 
 ## Design Direction
@@ -15,16 +15,15 @@
 - Component language: preserve the existing sidebar, settings tabs, cards, buttons, toggles, icon system, tokens, and Chinese/English localization
 - Motion: restrained and functional; respect reduced-motion preferences
 
-## Current Iteration
+## Product Contracts
 
-- Scope: Settings > Privacy & Data only
-- Selected reference: the third generated layout shown on 2026-07-11
-- Goal: make all privacy explanations and five existing controls visible in the standard desktop viewport
-- Functional constraint: do not change copy, handlers, confirmation dialogs, persistence, API keys, provider configuration behavior, or diagnostic export behavior
-- Responsive constraint: preserve the compact desktop composition and fall back to a single column when the content area becomes narrow
+- Selection polish, history-derived actions, streaming diagnostics, and style packs are supported product capabilities; their runtime contracts live in the owning modules and tests.
+- Structured diagnostics follow the [diagnostic observability contract](docs/superpowers/specs/2026-05-21-diagnostic-observability-design.md).
+- LLM correction follows the [conservative ASR correction contract](docs/superpowers/specs/2026-05-24-asr-contextual-correction-design.md).
+- Iteration-specific restrictions belong in their versioned spec, not in this stable product context.
 
 ## Anti-References
 
 - Avoid one oversized vertical list with large empty areas
 - Avoid nested cards, heavy borders, decorative shadows, loud danger styling, and unnecessary new labels
-- Avoid new icons, features, routes, buttons, or rewritten explanatory text
+- Extend the existing icon system, navigation, controls, tokens, and localization instead of introducing a parallel visual language

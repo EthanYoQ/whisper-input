@@ -47,11 +47,12 @@ use crate::polish::{
 use crate::qa_hotkey::{QaHotkeyError, QaHotkeyEvent, QaHotkeyMonitor};
 use crate::recorder::{Recorder, RecorderError};
 use crate::selection::capture_selection;
+use crate::style_packs::StylePackStore;
 #[cfg(target_os = "windows")]
 use crate::types::PasteShortcut;
 use crate::types::{
     CapsulePayload, CapsuleState, ChineseScriptPreference, DictationSession, HotkeyCapability,
-    HotkeyStatus, HotkeyStatusState, InsertStatus, OutputLanguagePreference, PolishMode,
+    HotkeyStatus, HotkeyStatusState, InsertStatus, OutputLanguagePreference, PolishMode, StylePack,
 };
 #[cfg(target_os = "windows")]
 use crate::windows_ime_ipc::ImeSubmitTarget;
@@ -59,8 +60,10 @@ use crate::windows_ime_ipc::ImeSubmitTarget;
 use crate::windows_ime_session::{PreparedWindowsImeSession, WindowsImeSessionController};
 
 mod dictation;
+mod history_actions;
 mod qa;
 mod resources;
+mod selection_polish;
 
 #[cfg(test)]
 use dictation::dictation_error_code;
@@ -107,6 +110,7 @@ struct Inner {
     history: HistoryStore,
     diagnostics: DiagnosticStore,
     prefs: PreferencesStore,
+    style_packs: StylePackStore,
     vocab: DictionaryStore,
     correction_rules: CorrectionRuleStore,
     inserter: TextInserter,
@@ -140,6 +144,7 @@ struct Inner {
     translation_hotkey: Mutex<Option<ComboHotkeyMonitor>>,
     switch_style_hotkey: Mutex<Option<ComboHotkeyMonitor>>,
     open_app_hotkey: Mutex<Option<ComboHotkeyMonitor>>,
+    selection_polish_hotkey: Mutex<Option<ComboHotkeyMonitor>>,
     /// 翻译模式触发标志。每次 begin_session 重置为 false；hotkey 监听器在
     /// Listening / Starting 阶段看到 Shift down 边沿时 set true。
     /// end_session 在调 polish/translate 前读这个 flag + translation_target_language
@@ -161,6 +166,7 @@ struct Inner {
     /// polish::chat_completion_history_streaming 的 loop 每帧检查，true 时 break loop
     /// 避免取消后 LLM 仍 drain HTTP body 烧 token。详见 issue #161。
     qa_stream_cancelled: Arc<AtomicBool>,
+    selection_polish_state: Mutex<Option<selection_polish::SelectionPolishSession>>,
     /// Coordinator 退出信号。各 hotkey supervisor loop 在每轮重试 sleep 之前会检查
     /// 此 flag；为 true 时 loop 立刻 return。生产场景里 process exit 一并 reap 所有
     /// supervisor 线程，但 integration test 和未来 RunEvent::Exit 钩子需要这条
@@ -172,6 +178,7 @@ struct Inner {
 enum ActionHotkeyKind {
     SwitchStyle,
     OpenApp,
+    SelectionPolish,
 }
 
 #[cfg(target_os = "windows")]
@@ -214,6 +221,8 @@ impl Coordinator {
             HistoryStore::new().expect("history store init")
         });
         let prefs = PreferencesStore::new().expect("preferences store init");
+        let style_packs =
+            StylePackStore::new_for_coordinator(&prefs.get()).expect("style pack store init");
         let vocab = DictionaryStore::new().expect("dictionary store init");
         let correction_rules = CorrectionRuleStore::new().expect("correction rule store init");
 
@@ -223,6 +232,7 @@ impl Coordinator {
                 history,
                 diagnostics,
                 prefs,
+                style_packs,
                 vocab,
                 correction_rules,
                 inserter: TextInserter::new(),
@@ -241,6 +251,7 @@ impl Coordinator {
                 translation_hotkey: Mutex::new(None),
                 switch_style_hotkey: Mutex::new(None),
                 open_app_hotkey: Mutex::new(None),
+                selection_polish_hotkey: Mutex::new(None),
                 translation_modifier_seen: AtomicBool::new(false),
                 qa_hotkey: Mutex::new(None),
                 qa_state: Mutex::new(QaSessionState::default()),
@@ -248,6 +259,7 @@ impl Coordinator {
                 qa_asr: Mutex::new(None),
                 qa_recorder: Mutex::new(None),
                 qa_stream_cancelled: Arc::new(AtomicBool::new(false)),
+                selection_polish_state: Mutex::new(None),
                 local_asr_cache: Arc::new(crate::asr::local::LocalAsrCache::new()),
                 shutdown: AtomicBool::new(false),
             }),
@@ -277,6 +289,8 @@ impl Coordinator {
             HistoryStore::new().expect("history store init")
         });
         let prefs = PreferencesStore::new().expect("preferences store init");
+        let style_packs =
+            StylePackStore::new_for_coordinator(&prefs.get()).expect("style pack store init");
         let vocab = DictionaryStore::new().expect("dictionary store init");
         let correction_rules = CorrectionRuleStore::new().expect("correction rule store init");
 
@@ -286,6 +300,7 @@ impl Coordinator {
                 history,
                 diagnostics,
                 prefs,
+                style_packs,
                 vocab,
                 correction_rules,
                 inserter: TextInserter::new(),
@@ -306,6 +321,7 @@ impl Coordinator {
                 translation_hotkey: Mutex::new(None),
                 switch_style_hotkey: Mutex::new(None),
                 open_app_hotkey: Mutex::new(None),
+                selection_polish_hotkey: Mutex::new(None),
                 translation_modifier_seen: AtomicBool::new(false),
                 qa_hotkey: Mutex::new(None),
                 qa_state: Mutex::new(QaSessionState::default()),
@@ -313,6 +329,7 @@ impl Coordinator {
                 qa_asr: Mutex::new(None),
                 qa_recorder: Mutex::new(None),
                 qa_stream_cancelled: Arc::new(AtomicBool::new(false)),
+                selection_polish_state: Mutex::new(None),
                 local_asr_cache: Arc::new(crate::asr::local::LocalAsrCache::new()),
                 foundry_local_runtime,
                 shutdown: AtomicBool::new(false),
@@ -472,6 +489,18 @@ impl Coordinator {
 
     pub fn stop_open_app_hotkey_listener(&self) {
         take_action_hotkey_on_main_thread(&self.inner, ActionHotkeyKind::OpenApp);
+    }
+
+    pub fn start_selection_polish_hotkey_listener(&self) {
+        let inner = Arc::clone(&self.inner);
+        std::thread::Builder::new()
+            .name("whisper-input-selection-polish-hotkey-supervisor".into())
+            .spawn(move || action_hotkey_supervisor_loop(inner, ActionHotkeyKind::SelectionPolish))
+            .ok();
+    }
+
+    pub fn stop_selection_polish_hotkey_listener(&self) {
+        take_action_hotkey_on_main_thread(&self.inner, ActionHotkeyKind::SelectionPolish);
     }
 
     /// 用户在设置里改了自定义组合键时调用。
@@ -657,8 +686,15 @@ impl Coordinator {
         self.update_action_hotkey_binding(ActionHotkeyKind::OpenApp);
     }
 
+    pub fn update_selection_polish_hotkey_binding(&self) {
+        self.update_action_hotkey_binding(ActionHotkeyKind::SelectionPolish);
+    }
+
     fn update_action_hotkey_binding(&self, kind: ActionHotkeyKind) {
-        let binding = action_hotkey_binding(&self.inner, kind);
+        let Some(binding) = action_hotkey_binding(&self.inner, kind) else {
+            take_action_hotkey_on_main_thread(&self.inner, kind);
+            return;
+        };
         if is_modifier_only_shortcut(&binding) {
             take_action_hotkey_on_main_thread(&self.inner, kind);
             log::warn!("[coord] action hotkey {kind:?} 使用了不支持的 modifier-only 绑定，已关闭");
@@ -725,6 +761,58 @@ impl Coordinator {
     }
     pub fn prefs(&self) -> &PreferencesStore {
         &self.inner.prefs
+    }
+    pub fn style_packs(&self) -> &StylePackStore {
+        &self.inner.style_packs
+    }
+    pub fn settings_snapshot(&self) -> crate::types::UserPreferences {
+        compatibility_preferences_snapshot(&self.inner.prefs, &self.inner.style_packs)
+    }
+    pub async fn preview_style_pack(
+        &self,
+        draft: crate::types::StylePackDraft,
+        input: String,
+        kind: crate::types::StylePreviewKind,
+    ) -> Result<String, String> {
+        let prefs = self.inner.prefs.get();
+        let prompt = match kind {
+            crate::types::StylePreviewKind::Dictation => &draft.dictation_prompt,
+            crate::types::StylePreviewKind::Selection => &draft.selection_prompt,
+        };
+        let preview_guidance = style_preview_guidance(prompt, &draft.examples);
+        let front_app = capture_frontmost_app();
+        let result = match kind {
+            crate::types::StylePreviewKind::Dictation => {
+                polish_text_with_style(
+                    &input,
+                    draft.base_mode,
+                    &enabled_phrases(&self.inner),
+                    &prefs.working_languages,
+                    prefs.chinese_script_preference,
+                    prefs.effective_output_language_preference(),
+                    prefs.llm_thinking_enabled,
+                    front_app.as_deref(),
+                    &[],
+                    Some(&preview_guidance),
+                )
+                .await
+            }
+            crate::types::StylePreviewKind::Selection => {
+                polish_selection_text_with_style(
+                    &input,
+                    draft.base_mode,
+                    &enabled_phrases(&self.inner),
+                    &prefs.working_languages,
+                    prefs.chinese_script_preference,
+                    prefs.effective_output_language_preference(),
+                    prefs.llm_thinking_enabled,
+                    front_app.as_deref(),
+                    Some(&preview_guidance),
+                )
+                .await
+            }
+        };
+        result.map_err(|error| error.to_string())
     }
     pub fn vocab(&self) -> &DictionaryStore {
         &self.inner.vocab
@@ -847,31 +935,31 @@ impl Coordinator {
         Ok(())
     }
 
-    pub async fn repolish(&self, raw_text: String, mode: PolishMode) -> Result<String, String> {
-        let hotwords = enabled_phrases(&self.inner);
-        let prefs = self.inner.prefs.get();
-        let output_language_preference = prefs.effective_output_language_preference();
-        let working_languages = prefs.working_languages;
-        let chinese_script_preference = prefs.chinese_script_preference;
-        let llm_thinking_enabled = prefs.llm_thinking_enabled;
-        // repolish 是历史记录里手动重新润色，不再绑定原 session 的前台 app；
-        // 当下用户调起的 app 才是相关上下文（如果可拿）。
-        let front_app = capture_frontmost_app();
-        // repolish 是用户主动对单条历史"重新润色"，不应该被对话感知上下文影响——
-        // 用户改的就是这一条本身，不要把别的会话拿进来。所以始终走单轮路径。
-        polish_text(
-            &raw_text,
-            mode,
-            &hotwords,
-            &working_languages,
-            chinese_script_preference,
-            output_language_preference,
-            llm_thinking_enabled,
-            front_app.as_deref(),
-            &[],
-        )
-        .await
-        .map_err(|e| e.to_string())
+    pub async fn start_selection_polish(&self) -> Result<(), String> {
+        selection_polish::begin(&self.inner).await
+    }
+
+    pub fn confirm_selection_polish(&self, replacement: String) -> Result<InsertStatus, String> {
+        selection_polish::replace(&self.inner, replacement)
+    }
+
+    pub fn copy_selection_polish(&self, text: String) -> Result<(), String> {
+        selection_polish::copy(&self.inner, text)
+    }
+
+    pub fn cancel_selection_polish(&self) {
+        selection_polish::cancel(&self.inner);
+    }
+
+    pub async fn repolish_history_entry(
+        &self,
+        history_id: String,
+    ) -> Result<DictationSession, String> {
+        history_actions::repolish(&self.inner, history_id).await
+    }
+
+    pub fn reinsert_history_entry(&self, history_id: String) -> Result<DictationSession, String> {
+        history_actions::reinsert(&self.inner, history_id)
     }
 }
 
@@ -1270,7 +1358,11 @@ fn action_hotkey_supervisor_loop(inner: Arc<Inner>, kind: ActionHotkeyKind) {
         if inner.shutdown.load(Ordering::SeqCst) {
             return;
         }
-        let binding = action_hotkey_binding(&inner, kind);
+        let Some(binding) = action_hotkey_binding(&inner, kind) else {
+            take_action_hotkey_on_main_thread(&inner, kind);
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            continue;
+        };
         if is_modifier_only_shortcut(&binding) {
             take_action_hotkey_on_main_thread(&inner, kind);
             std::thread::sleep(std::time::Duration::from_secs(5));
@@ -1366,43 +1458,56 @@ fn handle_action_hotkey_pressed(inner: &Arc<Inner>, kind: ActionHotkeyKind) {
                 });
             }
         }
+        ActionHotkeyKind::SelectionPolish => {
+            let inner = Arc::clone(inner);
+            async_runtime::spawn(async move {
+                if let Err(error) = selection_polish::begin(&inner).await {
+                    log::warn!("[selection-polish] hotkey workflow failed: {error}");
+                }
+            });
+        }
     }
 }
 
 fn switch_to_previous_style(inner: &Arc<Inner>) {
-    let mut prefs = inner.prefs.get();
-    let order = [
-        PolishMode::Raw,
-        PolishMode::Light,
-        PolishMode::Structured,
-        PolishMode::Formal,
-    ];
-    let enabled: Vec<PolishMode> = order
-        .into_iter()
-        .filter(|mode| prefs.enabled_modes.contains(mode))
-        .collect();
-    if enabled.len() <= 1 {
-        log::info!("[coord] switch style hotkey ignored: enabled style count <= 1");
-        return;
+    match inner.style_packs.cycle_previous() {
+        Ok(Some(style_id)) => {
+            log::info!("[coord] switch style hotkey activated {style_id}");
+        }
+        Ok(None) => log::info!("[coord] switch style hotkey ignored: enabled style count <= 1"),
+        Err(error) => log::warn!("[coord] switch style hotkey failed: {error}"),
     }
-    let current_index = enabled
+}
+
+fn active_style(inner: &Arc<Inner>) -> StylePack {
+    inner.style_packs.active()
+}
+
+fn compatibility_preferences_snapshot(
+    preferences: &PreferencesStore,
+    style_packs: &StylePackStore,
+) -> crate::types::UserPreferences {
+    let snapshot = style_packs.snapshot();
+    let active = snapshot
+        .packs
         .iter()
-        .position(|mode| *mode == prefs.default_mode)
-        .unwrap_or(0);
-    let next_index = if current_index == 0 {
-        enabled.len() - 1
-    } else {
-        current_index - 1
-    };
-    prefs.default_mode = enabled[next_index];
-    if let Err(e) = inner.prefs.set(prefs.clone()) {
-        log::warn!("[coord] switch style hotkey 保存失败: {e}");
-    } else {
-        log::info!(
-            "[coord] switch style hotkey changed default mode to {}",
-            prefs.default_mode.display_name()
-        );
-    }
+        .find(|pack| pack.id == snapshot.active_style_id)
+        .cloned()
+        .unwrap_or_else(|| style_packs.active());
+    let mut prefs = preferences.get();
+    let default_mode = active.base_mode;
+    let enabled_modes = snapshot
+        .packs
+        .iter()
+        .filter(|pack| {
+            pack.kind == crate::types::StylePackKind::Builtin
+                && snapshot.enabled_style_ids.contains(&pack.id)
+        })
+        .map(|pack| pack.base_mode)
+        .collect();
+    prefs.default_mode = default_mode;
+    prefs.enabled_modes = enabled_modes;
+    prefs
 }
 
 fn take_combo_hotkey_on_main_thread(inner: &Arc<Inner>) {
@@ -1448,17 +1553,26 @@ fn action_hotkey_slot(
     match kind {
         ActionHotkeyKind::SwitchStyle => &inner.switch_style_hotkey,
         ActionHotkeyKind::OpenApp => &inner.open_app_hotkey,
+        ActionHotkeyKind::SelectionPolish => &inner.selection_polish_hotkey,
     }
 }
 
 fn action_hotkey_binding(
     inner: &Arc<Inner>,
     kind: ActionHotkeyKind,
-) -> crate::types::ShortcutBinding {
+) -> Option<crate::types::ShortcutBinding> {
     let prefs = inner.prefs.get();
+    action_hotkey_binding_from_prefs(&prefs, kind)
+}
+
+fn action_hotkey_binding_from_prefs(
+    prefs: &crate::types::UserPreferences,
+    kind: ActionHotkeyKind,
+) -> Option<crate::types::ShortcutBinding> {
     match kind {
-        ActionHotkeyKind::SwitchStyle => prefs.switch_style_hotkey,
-        ActionHotkeyKind::OpenApp => prefs.open_app_hotkey,
+        ActionHotkeyKind::SwitchStyle => Some(prefs.switch_style_hotkey.clone()),
+        ActionHotkeyKind::OpenApp => Some(prefs.open_app_hotkey.clone()),
+        ActionHotkeyKind::SelectionPolish => prefs.selection_polish_hotkey.clone(),
     }
 }
 
@@ -1476,6 +1590,7 @@ fn action_hotkey_bridge_thread_name(kind: ActionHotkeyKind) -> &'static str {
     match kind {
         ActionHotkeyKind::SwitchStyle => "openless-switch-style-hotkey-bridge",
         ActionHotkeyKind::OpenApp => "openless-open-app-hotkey-bridge",
+        ActionHotkeyKind::SelectionPolish => "whisper-input-selection-polish-hotkey-bridge",
     }
 }
 
@@ -1607,6 +1722,15 @@ fn reset_shortcut_held_state(inner: &Arc<Inner>) {
         if let Some(monitor) = inner.open_app_hotkey.lock().as_ref() {
             if let Err(e) = monitor.update_binding(prefs.open_app_hotkey.clone()) {
                 log::warn!("[coord] reset open-app hotkey latch failed: {e}");
+            }
+        }
+    }
+    if let Some(binding) = prefs.selection_polish_hotkey.as_ref() {
+        if !is_modifier_only_shortcut(binding) {
+            if let Some(monitor) = inner.selection_polish_hotkey.lock().as_ref() {
+                if let Err(e) = monitor.update_binding(binding.clone()) {
+                    log::warn!("[coord] reset selection-polish hotkey latch failed: {e}");
+                }
             }
         }
     }
@@ -2340,8 +2464,9 @@ async fn polish_or_passthrough(
     llm_thinking_enabled: bool,
     front_app: Option<&str>,
     prior_turns: &[(String, String)],
+    additional_style_prompt: Option<&str>,
 ) -> (String, Option<String>) {
-    match polish_text(
+    match polish_text_with_style(
         &raw.text,
         mode,
         hotwords,
@@ -2351,6 +2476,7 @@ async fn polish_or_passthrough(
         llm_thinking_enabled,
         front_app,
         prior_turns,
+        additional_style_prompt,
     )
     .await
     {
@@ -2363,7 +2489,8 @@ async fn polish_or_passthrough(
     }
 }
 
-async fn polish_text(
+#[allow(clippy::too_many_arguments)]
+async fn polish_text_with_style(
     raw: &str,
     mode: PolishMode,
     hotwords: &[String],
@@ -2373,6 +2500,7 @@ async fn polish_text(
     llm_thinking_enabled: bool,
     front_app: Option<&str>,
     prior_turns: &[(String, String)],
+    additional_style_prompt: Option<&str>,
 ) -> anyhow::Result<String> {
     // LLM 凭据账户名仍沿用 ark.* 以兼容旧 IPC；persistence.rs 会按 active
     // provider bucket 路由。Gemini 走原生 generateContent，其余统一走
@@ -2385,7 +2513,7 @@ async fn polish_text(
                 .with_thinking_enabled(llm_thinking_enabled),
         );
         return Ok(provider
-            .polish(
+            .polish_with_style(
                 raw,
                 mode,
                 hotwords,
@@ -2394,13 +2522,14 @@ async fn polish_text(
                 output_language_preference,
                 front_app,
                 prior_turns,
+                additional_style_prompt,
             )
             .await?);
     }
 
     let provider = build_active_llm_provider(llm_thinking_enabled)?;
     Ok(provider
-        .polish(
+        .polish_with_style(
             raw,
             mode,
             hotwords,
@@ -2409,11 +2538,76 @@ async fn polish_text(
             output_language_preference,
             front_app,
             prior_turns,
+            additional_style_prompt,
         )
         .await?)
 }
 
-/// 翻译路径——和 polish 一样失败时返回原文 + 失败原因，避免"不丢字"约定被违反（CLAUDE.md）。
+#[allow(clippy::too_many_arguments)]
+async fn polish_selection_text_with_style(
+    selected_text: &str,
+    mode: PolishMode,
+    hotwords: &[String],
+    working_languages: &[String],
+    chinese_script_preference: ChineseScriptPreference,
+    output_language_preference: OutputLanguagePreference,
+    llm_thinking_enabled: bool,
+    front_app: Option<&str>,
+    additional_style_prompt: Option<&str>,
+) -> anyhow::Result<String> {
+    let active_llm = CredentialsVault::get_active_llm();
+    if active_llm == crate::product::GEMINI_PROVIDER_ID {
+        let credentials = read_gemini_credentials()?;
+        let provider = GeminiProvider::new(
+            GeminiConfig::new(credentials.api_key, credentials.model, credentials.base_url)
+                .with_thinking_enabled(llm_thinking_enabled),
+        );
+        return Ok(provider
+            .polish_selection_with_style(
+                selected_text,
+                mode,
+                hotwords,
+                working_languages,
+                chinese_script_preference,
+                output_language_preference,
+                front_app,
+                additional_style_prompt,
+            )
+            .await?);
+    }
+
+    let provider = build_active_llm_provider(llm_thinking_enabled)?;
+    Ok(provider
+        .polish_selection_with_style(
+            selected_text,
+            mode,
+            hotwords,
+            working_languages,
+            chinese_script_preference,
+            output_language_preference,
+            front_app,
+            additional_style_prompt,
+        )
+        .await?)
+}
+
+fn style_preview_guidance(prompt: &str, examples: &[crate::types::StylePackExample]) -> String {
+    let mut guidance = prompt.trim().to_string();
+    if !examples.is_empty() {
+        guidance.push_str("\n\n# Local style examples\n");
+        for example in examples {
+            guidance.push_str(&format!(
+                "Example: {}\nInput:\n{}\nOutput:\n{}\n",
+                example.title.trim(),
+                example.input.trim(),
+                example.output.trim(),
+            ));
+        }
+    }
+    guidance
+}
+
+/// 翻译失败时返回原文和失败原因，保持“不丢字”契约。
 async fn translate_or_passthrough(
     raw: &RawTranscript,
     target_language: &str,
@@ -3015,6 +3209,8 @@ async fn end_qa_session(inner: &Arc<Inner>) -> Result<(), String> {
             dictionary_entry_count: None,
             asr_provider_id: None,
             llm_provider_id: Some(llm_provider_id),
+            history_action: None,
+            source_session_id: None,
         };
         if let Err(e) = inner
             .history
@@ -3337,6 +3533,32 @@ fn openai_compatible_endpoint_requires_key(endpoint: &str) -> bool {
 mod tests {
     use super::dictation::abort_recording_with_error;
     use super::*;
+
+    #[test]
+    fn unconfigured_selection_polish_hotkey_has_no_registration_candidate() {
+        let prefs = crate::types::UserPreferences::default();
+
+        assert_eq!(
+            action_hotkey_binding_from_prefs(&prefs, ActionHotkeyKind::SelectionPolish),
+            None
+        );
+    }
+
+    #[test]
+    fn style_preview_guidance_includes_unsaved_examples() {
+        let guidance = style_preview_guidance(
+            "Keep it concise.",
+            &[crate::types::StylePackExample {
+                title: "Status update".into(),
+                input: "We finished the work".into(),
+                output: "Work completed.".into(),
+            }],
+        );
+
+        assert!(guidance.contains("Keep it concise."));
+        assert!(guidance.contains("We finished the work"));
+        assert!(guidance.contains("Work completed."));
+    }
     use crate::types::{HotkeyMode, HotkeyTrigger};
     use once_cell::sync::Lazy;
 

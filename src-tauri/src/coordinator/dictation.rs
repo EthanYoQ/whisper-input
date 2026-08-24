@@ -8,7 +8,9 @@ use crate::diagnostics::{
     DiagnosticApp, DiagnosticAsr, DiagnosticInsertion, DiagnosticLlm, DiagnosticRecorderFacts,
     DiagnosticSession, DiagnosticTrace,
 };
-use crate::types::{HotkeyMode, OutputLanguagePreference, UserPreferences};
+use crate::types::{
+    ChineseScriptPreference, HotkeyMode, OutputLanguagePreference, UserPreferences,
+};
 
 use super::qa::handle_qa_option_edge;
 use super::resources::*;
@@ -53,9 +55,11 @@ fn should_bypass_llm_for_short_transcript(
     text: &str,
     translation_active: bool,
     output_operation: DictationOutputOperation,
+    custom_dictation_prompt_active: bool,
 ) -> bool {
     !translation_active
         && output_operation == DictationOutputOperation::Polish
+        && !custom_dictation_prompt_active
         && effective_transcript_char_count(text) < SHORT_TRANSCRIPT_LLM_BYPASS_CHAR_THRESHOLD
 }
 
@@ -203,13 +207,14 @@ fn new_begin_error_trace(
     asr_provider_id: &str,
 ) -> DiagnosticTrace {
     let prefs = inner.prefs.get();
+    let mode = super::active_style(inner).base_mode;
     let (front_app, cancelled) = {
         let state = inner.state.lock();
         (state.front_app.clone(), state.cancelled)
     };
     let mut trace = new_dictation_trace(
         Uuid::new_v4().to_string(),
-        prefs.default_mode,
+        mode,
         prefs.hotkey.mode,
         front_app,
         asr_provider_id.to_string(),
@@ -297,16 +302,88 @@ fn dictation_output_operation(prefs: &UserPreferences) -> DictationOutputOperati
     }
 }
 
-fn should_stream_polish_insert(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StreamingPolishEligibility {
+    Eligible,
+    Disabled,
+    Translation,
+    UnsupportedMode,
+    ChineseScriptTransform,
+    CorrectionRules,
+    ShortInputBypass,
+    CustomStyle,
+    ProviderUnsupported,
+}
+
+impl StreamingPolishEligibility {
+    const fn is_eligible(self) -> bool {
+        matches!(self, Self::Eligible)
+    }
+
+    const fn fallback_reason(self) -> Option<&'static str> {
+        match self {
+            Self::Eligible => None,
+            Self::Disabled => Some("disabled"),
+            Self::Translation => Some("translation"),
+            Self::UnsupportedMode => Some("unsupportedMode"),
+            Self::ChineseScriptTransform => Some("chineseScriptTransform"),
+            Self::CorrectionRules => Some("correctionRules"),
+            Self::ShortInputBypass => Some("shortInputBypass"),
+            Self::CustomStyle => Some("customStyle"),
+            Self::ProviderUnsupported => Some("providerUnsupported"),
+        }
+    }
+}
+
+fn streaming_polish_eligibility(
     prefs: &UserPreferences,
     translation_active: bool,
     output_operation: DictationOutputOperation,
     mode: PolishMode,
-) -> bool {
-    prefs.streaming_insert
-        && !translation_active
-        && output_operation != DictationOutputOperation::TranslateToEnglish
-        && mode == PolishMode::Light
+    has_enabled_correction_rules: bool,
+    short_input_bypass: bool,
+    custom_style: bool,
+    provider_supports_streaming: bool,
+) -> StreamingPolishEligibility {
+    if !prefs.streaming_insert {
+        return StreamingPolishEligibility::Disabled;
+    }
+    if translation_active || output_operation != DictationOutputOperation::Polish {
+        return StreamingPolishEligibility::Translation;
+    }
+    if mode != PolishMode::Light {
+        return StreamingPolishEligibility::UnsupportedMode;
+    }
+    if prefs.chinese_script_preference != ChineseScriptPreference::Auto {
+        return StreamingPolishEligibility::ChineseScriptTransform;
+    }
+    if has_enabled_correction_rules {
+        return StreamingPolishEligibility::CorrectionRules;
+    }
+    if short_input_bypass {
+        return StreamingPolishEligibility::ShortInputBypass;
+    }
+    if custom_style {
+        return StreamingPolishEligibility::CustomStyle;
+    }
+    if !provider_supports_streaming {
+        return StreamingPolishEligibility::ProviderUnsupported;
+    }
+    StreamingPolishEligibility::Eligible
+}
+
+fn streaming_focus_matches(expected: Option<usize>, current: Option<usize>) -> bool {
+    expected.is_some() && expected == current
+}
+
+#[cfg(target_os = "windows")]
+fn streaming_focus_target_is_current(expected: Option<usize>) -> bool {
+    streaming_focus_matches(expected, capture_focus_target())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn streaming_focus_target_is_current(_expected: Option<usize>) -> bool {
+    true
 }
 
 #[cfg(target_os = "windows")]
@@ -336,12 +413,11 @@ fn tsf_experiment_enabled() -> bool {
 ///    `restore_input_source` 恢复用户原输入源（macOS 才有意义，其他平台 no-op）。
 /// 5. 返回 `(polished, polish_error, already_streamed)`：
 ///    - 成功：`(text, None, true)` — 字符已经在屏幕上，调用方应当跳过 `inserter.insert`
-///    - 失败：`(raw_text, Some(reason), false)` — 流式过程出错，调用方走 raw 一次性兜底
+///    - 失败且已落字：保留实际落下的前缀并停止，不追加完整结果
+///    - 失败且尚未落字：回到一次性插入路径
 ///    - 不支持：`run_streaming_polish` 内部直接调 `polish_or_passthrough` 透明降级
 ///
-/// **不在流式路径里做**：`apply_chinese_script_preference` / `apply_correction_rules`
-/// 这两步在 v1 跳过 —— 字符已经一边流一边落出去了，不好回退。需要的话只能关 toggle 走
-/// 一次性路径。
+/// 需要字形转换或确定性纠正规则时，会在首个 delta 前整段降级到一次性路径。
 #[allow(clippy::too_many_arguments)]
 async fn run_streaming_polish(
     inner: &Arc<Inner>,
@@ -373,6 +449,7 @@ async fn run_streaming_polish(
             llm_thinking_enabled,
             front_app,
             prior_turns,
+            None,
         )
         .await;
         return (p, e, false);
@@ -402,6 +479,7 @@ async fn run_streaming_polish(
                 llm_thinking_enabled,
                 front_app,
                 prior_turns,
+                None,
             )
             .await;
             return (p, err, false);
@@ -412,6 +490,7 @@ async fn run_streaming_polish(
     // 同时累积 typed_text：屏幕上真正落字的内容，用于（a）SSE 中途失败时让 history
     // 与用户实际看到的内容一致；（b）pr-agent #412 反馈 \"saved output diverges
     // from what the user actually sees\"。
+    let expected_focus_target = inner.state.lock().focus_target;
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
     let typer_handle = tokio::task::spawn_blocking(move || {
         let mut rx = rx;
@@ -421,6 +500,10 @@ async fn run_streaming_polish(
             if first_failure.is_some() {
                 // 一旦类型链路出错（如 Secure Input 启用），后续 delta 全部丢弃，但仍
                 // 把 mpsc drain 完，避免发送端阻塞。
+                continue;
+            }
+            if !streaming_focus_target_is_current(expected_focus_target) {
+                first_failure = Some("focus target changed during streaming".into());
                 continue;
             }
             match crate::unicode_keystroke::type_unicode_chunk(&delta) {
@@ -553,6 +636,7 @@ async fn run_streaming_polish(
                 llm_thinking_enabled,
                 front_app,
                 prior_turns,
+                None,
             )
             .await;
             (p, e, false)
@@ -1444,10 +1528,11 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
     let asr_provider_id = CredentialsVault::get_active_asr();
     let llm_provider_id = CredentialsVault::get_active_llm();
     let trace_prefs = inner.prefs.get();
+    let trace_mode = super::active_style(inner).base_mode;
     let trace_front_app = inner.state.lock().front_app.clone();
     let mut diagnostic_trace = new_dictation_trace(
         Uuid::new_v4().to_string(),
-        trace_prefs.default_mode,
+        trace_mode,
         trace_prefs.hotkey.mode,
         trace_front_app,
         asr_provider_id.clone(),
@@ -1968,12 +2053,13 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
             raw.text
         );
         let prefs = inner.prefs.get();
+        let mode = super::active_style(inner).base_mode;
         let session = DictationSession {
             id: Uuid::new_v4().to_string(),
             created_at: Utc::now().to_rfc3339(),
             raw_transcript: raw.text.clone(),
             final_text: String::new(),
-            mode: prefs.default_mode,
+            mode,
             app_bundle_id: None,
             app_name: None,
             insert_status: InsertStatus::Failed,
@@ -1982,6 +2068,8 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
             dictionary_entry_count: Some(enabled_phrases(inner).len() as u32),
             asr_provider_id: Some(asr_provider_id.clone()),
             llm_provider_id: Some(llm_provider_id.clone()),
+            history_action: None,
+            source_session_id: None,
         };
         if prefs.history_enabled {
             if let Err(e) = inner
@@ -1991,8 +2079,8 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                 log::error!("[coord] history append failed: {e}");
             }
         }
-        diagnostic_trace.session.mode = Some(format!("{:?}", prefs.default_mode));
-        diagnostic_trace.llm.mode = Some(format!("{:?}", prefs.default_mode));
+        diagnostic_trace.session.mode = Some(format!("{mode:?}"));
+        diagnostic_trace.llm.mode = Some(format!("{mode:?}"));
         diagnostic_trace.asr.error = Some("emptyTranscript".to_string());
         diagnostic_trace.llm.final_text = Some(String::new());
         diagnostic_trace.llm.final_chars = Some(0);
@@ -2033,7 +2121,8 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
     }
 
     let prefs = inner.prefs.get();
-    let mode = prefs.default_mode;
+    let style = super::active_style(inner);
+    let mode = style.base_mode;
     diagnostic_trace.session.mode = Some(format!("{mode:?}"));
     diagnostic_trace.session.hotkey_mode = Some(format!("{:?}", prefs.hotkey.mode));
     diagnostic_trace.llm.mode = Some(format!("{mode:?}"));
@@ -2050,8 +2139,13 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
     let translation_active = crate::product::SHOW_TRANSLATION
         && inner.translation_modifier_seen.load(Ordering::SeqCst)
         && !translation_target.is_empty();
-    let short_transcript_llm_bypass =
-        should_bypass_llm_for_short_transcript(&raw.text, translation_active, output_operation);
+    let short_transcript_llm_bypass = should_bypass_llm_for_short_transcript(
+        &raw.text,
+        translation_active,
+        output_operation,
+        style.kind == crate::types::StylePackKind::Custom
+            && !style.dictation_prompt.trim().is_empty(),
+    );
 
     emit_capsule(
         inner,
@@ -2098,12 +2192,19 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
     } else {
         Vec::new()
     };
-    // 流式插入 opt-in 路径：开关打开 + 非翻译 + 轻度润色 → 进入流式分支。
-    // 清晰结构 / 正式表达需要完整文本后做编号和段落版式归一化；逐字 delta
-    // 已经落到光标后无法可靠回填换行，因此这两种模式走一次性插入路径。
-    // 任何不满足都走原一次性 polish_or_passthrough 路径，行为跟历史完全一致。
-    let streaming_eligible =
-        should_stream_polish_insert(&prefs, translation_active, output_operation, mode);
+    // 资格判定发生在首个 SSE delta 写入前。任何需要完整文本后处理的配置都整段
+    // 降级为一次性插入，避免字形转换或确定性纠正规则在流式路径里产生半段差异。
+    let streaming_eligibility = streaming_polish_eligibility(
+        &prefs,
+        translation_active,
+        output_operation,
+        mode,
+        correction_rules.iter().any(|rule| rule.enabled),
+        short_transcript_llm_bypass,
+        style.kind == crate::types::StylePackKind::Custom,
+        CredentialsVault::get_active_llm() == crate::product::GEMINI_PROVIDER_ID,
+    );
+    let streaming_eligible = streaming_eligibility.is_eligible();
     log::info!(
         "[coord] polish dispatch: translation={translation_active} output_operation={output_operation:?} mode={mode:?} stream_enabled={} streaming_eligible={streaming_eligible} active_llm={}",
         prefs.streaming_insert,
@@ -2115,6 +2216,8 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
     let llm_start = Instant::now();
     diagnostic_trace.llm.short_input_bypass = short_transcript_llm_bypass;
     diagnostic_trace.llm.streaming_insert_eligible = streaming_eligible;
+    diagnostic_trace.llm.streaming_fallback_reason =
+        streaming_eligibility.fallback_reason().map(str::to_string);
     diagnostic_trace.llm.started_at_ms = Some(elapsed);
 
     let (polished, polish_error, already_streamed) = if translation_active {
@@ -2177,6 +2280,7 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
             )
             .await
         } else {
+            diagnostic_trace.llm.streaming_fallback_reason = Some("focusTargetUnavailable".into());
             log::warn!(
                 "[coord] streaming_insert: original focus target not ready before stream; fall back to one-shot"
             );
@@ -2190,6 +2294,7 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                 llm_thinking_enabled,
                 front_app.as_deref(),
                 &prior_turns,
+                Some(&style.dictation_prompt),
             )
             .await;
             (p, e, false)
@@ -2205,6 +2310,7 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
             llm_thinking_enabled,
             front_app.as_deref(),
             &prior_turns,
+            Some(&style.dictation_prompt),
         )
         .await;
         (p, e, false)
@@ -2379,6 +2485,8 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
         dictionary_entry_count: Some(total_hits.min(u32::MAX as u64) as u32),
         asr_provider_id: Some(asr_provider_id),
         llm_provider_id: Some(llm_provider_id),
+        history_action: None,
+        source_session_id: None,
     };
     if prefs.history_enabled {
         if let Err(e) = inner
@@ -2490,10 +2598,14 @@ mod tests {
     use super::{
         asr_transcript_has_no_speech, complete_trace_texts, diagnostic_insert_method,
         diagnostic_trace_for_test, dictation_output_operation, qingyu_local_asr_readiness_error,
-        should_bypass_llm_for_short_transcript, should_stream_polish_insert,
-        DictationOutputOperation, SHORT_TRANSCRIPT_LLM_BYPASS_CHAR_THRESHOLD,
+        should_bypass_llm_for_short_transcript, streaming_focus_matches,
+        streaming_polish_eligibility, DictationOutputOperation, StreamingPolishEligibility,
+        SHORT_TRANSCRIPT_LLM_BYPASS_CHAR_THRESHOLD,
     };
-    use crate::types::{InsertStatus, OutputLanguagePreference, PolishMode, UserPreferences};
+    use crate::types::{
+        ChineseScriptPreference, InsertStatus, OutputLanguagePreference, PolishMode,
+        UserPreferences,
+    };
 
     #[test]
     fn diagnostic_insert_method_describes_streaming_and_clipboard_paths() {
@@ -2563,30 +2675,58 @@ mod tests {
             ..UserPreferences::default()
         };
 
-        assert!(should_stream_polish_insert(
-            &prefs,
-            false,
-            DictationOutputOperation::Polish,
-            PolishMode::Light
-        ));
-        assert!(!should_stream_polish_insert(
-            &prefs,
-            false,
-            DictationOutputOperation::Polish,
-            PolishMode::Structured
-        ));
-        assert!(!should_stream_polish_insert(
-            &prefs,
-            false,
-            DictationOutputOperation::Polish,
-            PolishMode::Formal
-        ));
-        assert!(!should_stream_polish_insert(
-            &prefs,
-            false,
-            DictationOutputOperation::Polish,
-            PolishMode::Raw
-        ));
+        assert_eq!(
+            streaming_polish_eligibility(
+                &prefs,
+                false,
+                DictationOutputOperation::Polish,
+                PolishMode::Light,
+                false,
+                false,
+                false,
+                true,
+            ),
+            StreamingPolishEligibility::Eligible
+        );
+        assert_eq!(
+            streaming_polish_eligibility(
+                &prefs,
+                false,
+                DictationOutputOperation::Polish,
+                PolishMode::Structured,
+                false,
+                false,
+                false,
+                true,
+            ),
+            StreamingPolishEligibility::UnsupportedMode
+        );
+        assert_eq!(
+            streaming_polish_eligibility(
+                &prefs,
+                false,
+                DictationOutputOperation::Polish,
+                PolishMode::Formal,
+                false,
+                false,
+                false,
+                true,
+            ),
+            StreamingPolishEligibility::UnsupportedMode
+        );
+        assert_eq!(
+            streaming_polish_eligibility(
+                &prefs,
+                false,
+                DictationOutputOperation::Polish,
+                PolishMode::Raw,
+                false,
+                false,
+                false,
+                true,
+            ),
+            StreamingPolishEligibility::UnsupportedMode
+        );
     }
 
     #[test]
@@ -2596,18 +2736,127 @@ mod tests {
             ..UserPreferences::default()
         };
 
-        assert!(!should_stream_polish_insert(
-            &prefs,
-            true,
-            DictationOutputOperation::Polish,
-            PolishMode::Light
-        ));
-        assert!(!should_stream_polish_insert(
-            &prefs,
+        assert_eq!(
+            streaming_polish_eligibility(
+                &prefs,
+                true,
+                DictationOutputOperation::Polish,
+                PolishMode::Light,
+                false,
+                false,
+                false,
+                true,
+            ),
+            StreamingPolishEligibility::Translation
+        );
+        assert_eq!(
+            streaming_polish_eligibility(
+                &prefs,
+                false,
+                DictationOutputOperation::TranslateToEnglish,
+                PolishMode::Light,
+                false,
+                false,
+                false,
+                true,
+            ),
+            StreamingPolishEligibility::Translation
+        );
+    }
+
+    #[test]
+    fn streaming_insert_falls_back_before_output_when_transforms_are_required() {
+        let prefs = UserPreferences {
+            streaming_insert: true,
+            chinese_script_preference: ChineseScriptPreference::Traditional,
+            ..UserPreferences::default()
+        };
+        assert_eq!(
+            streaming_polish_eligibility(
+                &prefs,
+                false,
+                DictationOutputOperation::Polish,
+                PolishMode::Light,
+                false,
+                false,
+                false,
+                true,
+            ),
+            StreamingPolishEligibility::ChineseScriptTransform
+        );
+
+        let prefs = UserPreferences::default();
+        assert_eq!(
+            streaming_polish_eligibility(
+                &prefs,
+                false,
+                DictationOutputOperation::Polish,
+                PolishMode::Light,
+                true,
+                false,
+                false,
+                true,
+            ),
+            StreamingPolishEligibility::CorrectionRules
+        );
+    }
+
+    #[test]
+    fn streaming_focus_guard_rejects_a_changed_windows_target() {
+        assert!(streaming_focus_matches(Some(41), Some(41)));
+        assert!(!streaming_focus_matches(Some(41), Some(99)));
+        assert!(!streaming_focus_matches(Some(41), None));
+    }
+
+    #[test]
+    fn streaming_short_input_bypass_has_a_stable_fallback_reason() {
+        let eligibility = streaming_polish_eligibility(
+            &UserPreferences::default(),
             false,
-            DictationOutputOperation::TranslateToEnglish,
-            PolishMode::Light
-        ));
+            DictationOutputOperation::Polish,
+            PolishMode::Light,
+            false,
+            true,
+            false,
+            true,
+        );
+
+        assert_eq!(eligibility, StreamingPolishEligibility::ShortInputBypass);
+        assert_eq!(eligibility.fallback_reason(), Some("shortInputBypass"));
+    }
+
+    #[test]
+    fn custom_style_falls_back_before_the_first_streaming_delta() {
+        let eligibility = streaming_polish_eligibility(
+            &UserPreferences::default(),
+            false,
+            DictationOutputOperation::Polish,
+            PolishMode::Light,
+            false,
+            false,
+            true,
+            true,
+        );
+
+        assert_eq!(eligibility, StreamingPolishEligibility::CustomStyle);
+        assert_eq!(eligibility.fallback_reason(), Some("customStyle"));
+    }
+
+    #[test]
+    fn unsupported_provider_has_a_stable_pre_stream_fallback_reason() {
+        let eligibility = streaming_polish_eligibility(
+            &UserPreferences::default(),
+            false,
+            DictationOutputOperation::Polish,
+            PolishMode::Light,
+            false,
+            false,
+            false,
+            false,
+        );
+
+        assert_eq!(eligibility, StreamingPolishEligibility::ProviderUnsupported);
+        assert_eq!(eligibility.fallback_reason(), Some("providerUnsupported"));
     }
 
     #[test]
@@ -2636,12 +2885,14 @@ mod tests {
         assert!(should_bypass_llm_for_short_transcript(
             "收到。",
             false,
-            DictationOutputOperation::Polish
+            DictationOutputOperation::Polish,
+            false,
         ));
         assert!(should_bypass_llm_for_short_transcript(
             "明天见",
             false,
-            DictationOutputOperation::Polish
+            DictationOutputOperation::Polish,
+            false,
         ));
     }
 
@@ -2651,7 +2902,8 @@ mod tests {
         assert!(should_bypass_llm_for_short_transcript(
             short_with_punctuation,
             false,
-            DictationOutputOperation::Polish
+            DictationOutputOperation::Polish,
+            false,
         ));
     }
 
@@ -2661,18 +2913,40 @@ mod tests {
         assert!(!should_bypass_llm_for_short_transcript(
             &at_threshold,
             false,
-            DictationOutputOperation::Polish
+            DictationOutputOperation::Polish,
+            false,
         ));
         assert!(!should_bypass_llm_for_short_transcript(
             "收到",
             true,
-            DictationOutputOperation::Polish
+            DictationOutputOperation::Polish,
+            false,
         ));
         assert!(!should_bypass_llm_for_short_transcript(
             "收到",
             false,
-            DictationOutputOperation::TranslateToEnglish
+            DictationOutputOperation::TranslateToEnglish,
+            false,
         ));
+    }
+
+    #[test]
+    fn short_transcript_does_not_bypass_a_custom_dictation_prompt() {
+        assert!(!should_bypass_llm_for_short_transcript(
+            "收到",
+            false,
+            DictationOutputOperation::Polish,
+            true,
+        ));
+    }
+
+    #[test]
+    fn dictation_production_paths_do_not_read_the_legacy_default_mode() {
+        let source = include_str!("dictation.rs");
+        let legacy_read = ["prefs", "default_mode"].join(".");
+        let trace_legacy_read = ["trace_prefs", "default_mode"].join(".");
+        assert!(!source.contains(&legacy_read));
+        assert!(!source.contains(&trace_legacy_read));
     }
 
     #[test]

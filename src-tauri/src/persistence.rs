@@ -97,7 +97,7 @@ fn reset_credentials_cache_for_tests() {
 
 // ───────────────────────── path helpers ─────────────────────────
 
-fn data_dir() -> Result<PathBuf> {
+pub(crate) fn data_dir() -> Result<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let home = std::env::var("HOME").context("HOME not set")?;
@@ -236,7 +236,7 @@ pub fn foundry_logs_root() -> Result<PathBuf> {
 }
 
 /// Atomic write: write to `*.tmp` first, then rename onto the target path.
-fn atomic_write(path: &Path, contents: &[u8]) -> Result<()> {
+pub(crate) fn atomic_write(path: &Path, contents: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         ensure_dir(parent)?;
     }
@@ -1180,13 +1180,15 @@ impl HistoryStore {
         let _guard = self.lock.lock();
         let mut sessions = self.read_locked()?;
         let mut stats = self.read_or_migrate_usage_stats_from_sessions_locked(&sessions)?;
-        stats.total_chars = stats
-            .total_chars
-            .saturating_add(session.final_text.encode_utf16().count() as u64);
-        stats.total_duration_ms = stats
-            .total_duration_ms
-            .saturating_add(session.duration_ms.unwrap_or(0));
-        stats.total_segments = stats.total_segments.saturating_add(1);
+        if !session.is_derived_history_action() {
+            stats.total_chars = stats
+                .total_chars
+                .saturating_add(session.final_text.encode_utf16().count() as u64);
+            stats.total_duration_ms = stats
+                .total_duration_ms
+                .saturating_add(session.duration_ms.unwrap_or(0));
+            stats.total_segments = stats.total_segments.saturating_add(1);
+        }
         // Prepend so the newest session is at index 0, matching the Swift impl.
         sessions.insert(0, session);
         if retention_days > 0 {
@@ -1222,6 +1224,7 @@ impl HistoryStore {
                     .map(|t| t.with_timezone(&chrono::Utc) >= cutoff)
                     .unwrap_or(false)
             })
+            .filter(|session| !session.is_derived_history_action())
             .collect();
         Ok(filtered)
     }
@@ -1278,6 +1281,7 @@ impl HistoryStore {
 fn usage_stats_from_sessions(sessions: &[DictationSession]) -> UsageStats {
     sessions
         .iter()
+        .filter(|session| !session.is_derived_history_action())
         .fold(UsageStats::default(), |mut stats, session| {
             stats.total_chars = stats
                 .total_chars
@@ -1963,6 +1967,18 @@ mod tests {
         fs::remove_dir_all(dir).ok();
     }
 
+    #[test]
+    fn derived_history_actions_do_not_change_dictation_stats() {
+        let mut derived = test_session(2, "repolished");
+        derived.history_action = Some(crate::types::HistoryAction::Repolish);
+        derived.source_session_id = Some("session-1".into());
+
+        let stats = super::usage_stats_from_sessions(&[test_session(1, "original"), derived]);
+
+        assert_eq!(stats.total_segments, 1);
+        assert_eq!(stats.total_chars, "original".encode_utf16().count() as u64);
+    }
+
     fn test_session(index: usize, final_text: &str) -> DictationSession {
         DictationSession {
             id: format!("session-{index}"),
@@ -1978,6 +1994,8 @@ mod tests {
             dictionary_entry_count: None,
             asr_provider_id: None,
             llm_provider_id: None,
+            history_action: None,
+            source_session_id: None,
         }
     }
 

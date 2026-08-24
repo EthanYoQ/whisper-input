@@ -10,11 +10,16 @@ import type {
   DictionaryEntry,
   HotkeyCapability,
   HotkeyStatus,
+  InsertStatus,
   MicrophoneDevice,
   PermissionStatus,
   PolishMode,
   QaHotkeyBinding,
   ShortcutBinding,
+  SelectionPolishOutputMode,
+  StylePackCatalogSnapshot,
+  StylePackDraft,
+  StylePreviewKind,
   UpdateChannel,
   UsageStats,
   UserPreferences,
@@ -73,6 +78,8 @@ const mockSettings: UserPreferences = {
   workingLanguages: ['简体中文'],
   translationTargetLanguage: '',
   qaHotkey: PRODUCT_FEATURES.showSelectionAskTab ? defaultQaShortcut() : null,
+  selectionPolishHotkey: null,
+  selectionPolishOutputMode: 'previewConfirm',
   chineseScriptPreference: 'auto',
   outputLanguagePreference: 'auto',
   outputLanguagePreferenceExplicit: false,
@@ -297,6 +304,33 @@ export function clearHistory(): Promise<void> {
   return invokeOrMock('clear_history', undefined, () => undefined);
 }
 
+export function repolishHistoryEntry(historyId: string): Promise<DictationSession> {
+  return invokeOrMock('repolish_history_entry', { historyId }, () => {
+    const source = mockHistory.find(item => item.id === historyId);
+    if (!source) throw new Error('historyEntryNotFound');
+    return {
+      ...source,
+      id: `${source.id}-repolish`,
+      historyAction: 'repolish',
+      sourceSessionId: source.id,
+    };
+  });
+}
+
+export function reinsertHistoryEntry(historyId: string): Promise<DictationSession> {
+  return invokeOrMock('reinsert_history_entry', { historyId }, () => {
+    const source = mockHistory.find(item => item.id === historyId);
+    if (!source) throw new Error('historyEntryNotFound');
+    return {
+      ...source,
+      id: `${source.id}-reinsert`,
+      insertStatus: 'pasteSent',
+      historyAction: 'reinsert',
+      sourceSessionId: source.id,
+    };
+  });
+}
+
 export function clearLocalCache(): Promise<void> {
   return invokeOrMock('clear_local_cache', undefined, () => undefined);
 }
@@ -404,16 +438,90 @@ export function handleWindowHotkeyEvent(
 }
 
 // ── Polish ─────────────────────────────────────────────────────────────
-export function repolish(rawText: string, mode: PolishMode): Promise<string> {
-  return invokeOrMock('repolish', { rawText, mode }, () => rawText);
-}
-
 export function setDefaultPolishMode(mode: PolishMode): Promise<void> {
   return invokeOrMock('set_default_polish_mode', { mode }, () => undefined);
 }
 
 export function setStyleEnabled(mode: PolishMode, enabled: boolean): Promise<void> {
   return invokeOrMock('set_style_enabled', { mode, enabled }, () => undefined);
+}
+
+const BUILTIN_STYLE_PACKS: StylePackCatalogSnapshot = {
+  packs: [
+    ['builtin.raw', '原始转写', 'raw'],
+    ['builtin.light', '轻度润色', 'light'],
+    ['builtin.structured', '清晰结构', 'structured'],
+    ['builtin.formal', '正式表达', 'formal'],
+  ].map(([id, name, baseMode]) => ({
+    id,
+    name,
+    description: '',
+    kind: 'builtin' as const,
+    baseMode: baseMode as PolishMode,
+    dictationPrompt: '',
+    selectionPrompt: '',
+    examples: [],
+    createdAt: '',
+    updatedAt: '',
+  })),
+  activeStyleId: 'builtin.light',
+  enabledStyleIds: ['builtin.raw', 'builtin.light', 'builtin.structured', 'builtin.formal'],
+};
+
+export function listStylePacks(): Promise<StylePackCatalogSnapshot> {
+  return invokeOrMock('list_style_packs', undefined, () => BUILTIN_STYLE_PACKS);
+}
+
+export function createStylePack(draft: StylePackDraft): Promise<StylePackCatalogSnapshot> {
+  return invokeOrMock('create_style_pack', { draft }, () => BUILTIN_STYLE_PACKS);
+}
+
+export function updateStylePack(id: string, draft: StylePackDraft): Promise<StylePackCatalogSnapshot> {
+  return invokeOrMock('update_style_pack', { id, draft }, () => BUILTIN_STYLE_PACKS);
+}
+
+export function duplicateStylePack(id: string): Promise<StylePackCatalogSnapshot> {
+  return invokeOrMock('duplicate_style_pack', { id }, () => BUILTIN_STYLE_PACKS);
+}
+
+export function setStylePackEnabled(id: string, enabled: boolean): Promise<StylePackCatalogSnapshot> {
+  return invokeOrMock('set_style_pack_enabled', { id, enabled }, () => BUILTIN_STYLE_PACKS);
+}
+
+export function activateStylePack(id: string): Promise<StylePackCatalogSnapshot> {
+  return invokeOrMock('activate_style_pack', { id }, () => BUILTIN_STYLE_PACKS);
+}
+
+export function deleteStylePack(id: string): Promise<StylePackCatalogSnapshot> {
+  return invokeOrMock('delete_style_pack', { id }, () => BUILTIN_STYLE_PACKS);
+}
+
+export function previewStylePack(draft: StylePackDraft, input: string, kind: StylePreviewKind): Promise<string> {
+  return invokeOrMock('preview_style_pack', { draft, input, kind }, () => input);
+}
+
+export async function importStylePackFile(): Promise<StylePackCatalogSnapshot | null> {
+  if (!isTauri) return null;
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const sourcePath = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: 'Style pack JSON', extensions: ['json'] }],
+  });
+  if (!sourcePath) return null;
+  return invokeOrMock('import_style_pack_file', { sourcePath }, () => BUILTIN_STYLE_PACKS);
+}
+
+export async function exportStylePackFile(id: string, suggestedFileName: string): Promise<string | null> {
+  if (!isTauri) return null;
+  const { save } = await import('@tauri-apps/plugin-dialog');
+  const targetPath = await save({
+    defaultPath: suggestedFileName,
+    filters: [{ name: 'Style pack JSON', extensions: ['json'] }],
+  });
+  if (!targetPath) return null;
+  await invokeOrMock<void>('export_style_pack_file', { id, targetPath }, () => undefined);
+  return targetPath;
 }
 
 // ── Permissions ────────────────────────────────────────────────────────
@@ -462,6 +570,37 @@ export function qaWindowDismiss(): Promise<void> {
 
 export function qaWindowPin(pinned: boolean): Promise<void> {
   return invokeOrMock('qa_window_pin', { pinned }, () => undefined);
+}
+
+export function startSelectionPolish(): Promise<void> {
+  return invokeOrMock('start_selection_polish', undefined, () => undefined);
+}
+
+export function cancelSelectionPolish(): Promise<void> {
+  return invokeOrMock('cancel_selection_polish', undefined, () => undefined);
+}
+
+export function confirmSelectionPolish(replacement: string): Promise<InsertStatus> {
+  return invokeOrMock(
+    'confirm_selection_polish',
+    { replacement },
+    () => 'pasteSent' as InsertStatus,
+  );
+}
+
+export function copySelectionPolish(text: string): Promise<void> {
+  return invokeOrMock('copy_selection_polish', { text }, () => undefined);
+}
+
+export function setSelectionPolishPreferences(
+  binding: ShortcutBinding | null,
+  outputMode: SelectionPolishOutputMode,
+): Promise<void> {
+  return invokeOrMock(
+    'set_selection_polish_preferences',
+    { binding, outputMode },
+    () => undefined,
+  );
 }
 
 // ── Combo Hotkey (自定义录音组合键) ───────────────────────────────────

@@ -9,8 +9,8 @@ export const REQUIRED_SETTINGS_SECTIONS = [
   'about',
 ] as const;
 
-export const HISTORY_ROW_ACTION_LABELS = ['复制', '删除'] as const;
-export const FORBIDDEN_HISTORY_ACTIONS = ['重新润色'] as const;
+export const HISTORY_ROW_ACTION_LABELS = ['重新润色', '重新插入', '复制', '删除'] as const;
+export const FORBIDDEN_HISTORY_ACTIONS = [] as const;
 export const FORBIDDEN_RECORDING_LABELS = ['启用提示音', '录音状态浮窗'] as const;
 export const FORBIDDEN_ABOUT_LABELS = ['开发者', '隐私政策'] as const;
 export const ABOUT_REQUIRED_COPY = '如果喜欢这个项目，请前往 GitHub 点亮 Star，支持继续迭代。';

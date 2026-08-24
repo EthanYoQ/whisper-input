@@ -63,16 +63,22 @@ pub enum PasteShortcut {
 /// Auto-update 渠道。决定 Settings → 关于 里展示哪一类版本信息。
 /// `Stable` 沿用 `tauri-plugin-updater` 的默认 endpoints（即 `tauri.conf.json`
 /// 里的 `latest-{{target}}-{{arch}}.json`），与发版 pipeline 对齐。
-/// `Beta` 不动 plugin endpoints —— 只解锁 Settings 里"手动下载最新 Beta"的入口
-/// （fetch GitHub `prerelease` + 跳浏览器），物理隔离 Beta 包不会通过 auto-update
-/// 推到正式版用户。详见 README 的"Contributing workflow"和 CLAUDE.md 的
-/// `Branch & release-channel workflow` 段落。
+/// `Beta` 不改 plugin endpoints，只解锁 Settings 里的手动 Beta 下载入口；Beta 包
+/// 通过 GitHub prerelease 和浏览器下载，不会进入正式版自动更新渠道。
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum UpdateChannel {
     #[default]
     Stable,
     Beta,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SelectionPolishOutputMode {
+    DirectReplace,
+    #[default]
+    PreviewConfirm,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -82,6 +88,69 @@ pub enum InsertStatus {
     PasteSent,
     CopiedFallback,
     Failed,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum HistoryAction {
+    Repolish,
+    Reinsert,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum StylePackKind {
+    Builtin,
+    Custom,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StylePackExample {
+    pub title: String,
+    pub input: String,
+    pub output: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StylePack {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub kind: StylePackKind,
+    pub base_mode: PolishMode,
+    pub dictation_prompt: String,
+    pub selection_prompt: String,
+    pub examples: Vec<StylePackExample>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StylePackDraft {
+    pub name: String,
+    pub description: String,
+    pub base_mode: PolishMode,
+    pub dictation_prompt: String,
+    pub selection_prompt: String,
+    pub examples: Vec<StylePackExample>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StylePackCatalogSnapshot {
+    pub packs: Vec<StylePack>,
+    pub active_style_id: String,
+    pub enabled_style_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StylePreviewKind {
+    Dictation,
+    Selection,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +171,16 @@ pub struct DictationSession {
     pub asr_provider_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub llm_provider_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_action: Option<HistoryAction>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_session_id: Option<String>,
+}
+
+impl DictationSession {
+    pub fn is_derived_history_action(&self) -> bool {
+        self.history_action.is_some()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -219,6 +298,12 @@ pub struct UserPreferences {
     /// 默认 Cmd+Shift+; (macOS) / Ctrl+Shift+; (Windows)。详见 issue #118。
     #[serde(default = "default_qa_hotkey")]
     pub qa_hotkey: Option<ShortcutBinding>,
+    /// 选区润色快捷键。默认关闭，避免升级后抢占用户已有的全局快捷键。
+    #[serde(default)]
+    pub selection_polish_hotkey: Option<ShortcutBinding>,
+    /// 预览确认是安全默认值；直接替换由用户显式选择。
+    #[serde(default)]
+    pub selection_polish_output_mode: SelectionPolishOutputMode,
     /// 全局历史记录开关。关闭时不再向本地 history.json 追加新条目；
     /// 当前 session 输出仍照常进入 UI / 插入流程。
     #[serde(default = "default_true")]
@@ -387,6 +472,10 @@ struct UserPreferencesWire {
     #[serde(default)]
     output_language_preference_explicit: bool,
     qa_hotkey: Option<ShortcutBinding>,
+    #[serde(default)]
+    selection_polish_hotkey: Option<ShortcutBinding>,
+    #[serde(default)]
+    selection_polish_output_mode: SelectionPolishOutputMode,
     #[serde(default = "default_true")]
     history_enabled: bool,
     qa_save_history: bool,
@@ -448,6 +537,8 @@ impl Default for UserPreferencesWire {
             output_language_preference: prefs.output_language_preference,
             output_language_preference_explicit: prefs.output_language_preference_explicit,
             qa_hotkey: prefs.qa_hotkey,
+            selection_polish_hotkey: prefs.selection_polish_hotkey,
+            selection_polish_output_mode: prefs.selection_polish_output_mode,
             history_enabled: prefs.history_enabled,
             qa_save_history: prefs.qa_save_history,
             custom_combo_hotkey: prefs.custom_combo_hotkey,
@@ -512,6 +603,8 @@ impl<'de> Deserialize<'de> for UserPreferences {
             } else {
                 None
             },
+            selection_polish_hotkey: wire.selection_polish_hotkey,
+            selection_polish_output_mode: wire.selection_polish_output_mode,
             history_enabled: wire.history_enabled,
             qa_save_history: wire.qa_save_history,
             custom_combo_hotkey: wire.custom_combo_hotkey,
@@ -648,6 +741,8 @@ impl Default for UserPreferences {
             output_language_preference: OutputLanguagePreference::Auto,
             output_language_preference_explicit: false,
             qa_hotkey: default_qa_hotkey(),
+            selection_polish_hotkey: None,
+            selection_polish_output_mode: SelectionPolishOutputMode::PreviewConfirm,
             history_enabled: true,
             qa_save_history: false,
             custom_combo_hotkey: None,
@@ -1303,6 +1398,8 @@ mod tests {
             dictionary_entry_count: Some(0),
             asr_provider_id: Some(crate::product::QWEN_REALTIME_ASR_PROVIDER_ID.into()),
             llm_provider_id: Some(crate::product::GEMINI_PROVIDER_ID.into()),
+            history_action: None,
+            source_session_id: None,
         };
 
         let json = serde_json::to_value(session).unwrap();
@@ -1396,6 +1493,16 @@ mod tests {
         let prefs = UserPreferences::default();
 
         assert!(prefs.streaming_insert);
+    }
+
+    #[test]
+    fn legacy_preferences_gain_safe_selection_polish_defaults() {
+        let prefs: UserPreferences = serde_json::from_str("{}").unwrap();
+        assert_eq!(prefs.selection_polish_hotkey, None);
+        assert_eq!(
+            prefs.selection_polish_output_mode,
+            SelectionPolishOutputMode::PreviewConfirm
+        );
     }
 
     #[test]

@@ -16,22 +16,27 @@ import {
 } from './lib/windowHotkeyFallback';
 import { PRODUCT_NAME } from './lib/product';
 import { QaPanel } from './pages/QaPanel';
+import { SelectionPolishPanel } from './pages/SelectionPolishPanel';
 import type { SettingsSectionId } from './pages/Settings';
 import { HotkeySettingsProvider } from './state/HotkeySettingsContext';
 
 interface AppProps {
   isCapsule: boolean;
   isQa: boolean;
+  isSelectionPolish: boolean;
 }
 
 type Gate = 'checking' | 'onboarding' | 'ready';
 
-export function App({ isCapsule, isQa }: AppProps) {
+export function App({ isCapsule, isQa, isSelectionPolish }: AppProps) {
   if (isCapsule) {
     return <Capsule />;
   }
   if (isQa) {
     return <QaPanel />;
+  }
+  if (isSelectionPolish) {
+    return <SelectionPolishPanel />;
   }
 
   return <MainApp />;
