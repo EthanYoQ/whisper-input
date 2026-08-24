@@ -6,7 +6,12 @@ dist/
 .vite/
 .artifacts/
 .codegraph/
+/.runtime/
+/.scratch/
+/.worktrees/
+/design-qa.md
 
 # Tauri
 src-tauri/target/
+src-tauri/**/target/
 src-tauri/gen/
