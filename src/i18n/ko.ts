@@ -218,6 +218,7 @@ export const ko: typeof zhCN = {
     pasteSent: '붙여넣기 시도됨',
     copiedFallback: '복사됨({{shortcut}} 필요)',
     insertFailed: '입력 실패',
+    generatedResult: '새 결과 생성됨', notSaved: '저장 안 됨', repolish: '다시 다듬기', reinsert: '다시 삽입',
     confirmClear: '전체 {{count}}건의 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.',
   },
   vocab: {
@@ -269,6 +270,14 @@ export const ko: typeof zhCN = {
       structured: { name: '명확한 구조', desc: '구어 내용을 1, 2, 3, 1.1, 1.2, 2.1 같은 번호 구조로 정리합니다.', sample: '1. 로그인 확인\n2. 설정 수정\n2.1 API Key 버튼\n2.2 정보 페이지 내용' },
       formal: { name: '정식 표현', desc: '구어를 공식 이메일 또는 공문 표현으로 바꾸고 군말을 제거하며 호칭, 본문, 맺음말을 보완합니다.', sample: '왕 매니저님 안녕하세요.\n이 버전은 오늘 테스트가 완료되었습니다. 내일 확인 부탁드립니다.\n감사합니다.' },
     },
+  },
+  stylePacks: {
+    loading: '로컬 스타일 팩 불러오는 중', currentDescription: '현재: {{name}}. 사용자 스타일은 이 기기에만 저장됩니다.', new: '새 스타일', builtin: '기본 제공', local: '로컬', active: '현재', use: '사용', duplicate: '복제', edit: '편집', disable: '비활성화', enable: '활성화', saveFile: '파일로 저장', editCustom: '사용자 스타일 편집', createCustom: '사용자 스타일 만들기', name: '이름', description: '설명', dictationPrompt: '받아쓰기 추가 프롬프트', selectionPrompt: '선택 영역 다듬기 추가 프롬프트', examplesJson: '스타일 예시 JSON', examplesJsonInvalid: '예시는 JSON 배열이어야 합니다', save: '저장', cancelEdit: '편집 취소', previewTitle: '저장 전 미리보기', previewDisclosure: '미리보기 텍스트, 현재 초안과 스타일 예시는 설정된 모델 제공업체로 전송됩니다. 저장, 활성화, 삽입 또는 기록 추가는 하지 않습니다.', previewDictation: '받아쓰기 미리보기', previewSelection: '선택 영역 다듬기 미리보기', previewDefaultInput: '이 글을 업무 소통에 적합하게 다듬어 주세요', previewAction: '현재 모델로 미리보기', previewResult: '미리보기 결과', importFile: '파일 가져오기',
+    errors: { stylePackReadonlyOrNotFound: '이 스타일은 읽기 전용이거나 존재하지 않습니다.', stylePackNotFound: '스타일 팩을 찾을 수 없습니다.', stylePackBuiltinReadonly: '기본 제공 스타일은 읽기 전용입니다. 복제한 뒤 편집하세요.', stylePackDisabled: '사용하기 전에 스타일을 활성화하세요.', stylePackExportFailed: '스타일 팩을 내보낼 수 없습니다.', stylePackImportInvalid: '유효한 스타일 팩 파일이 아닙니다.', stylePackImportVersion: '지원하지 않는 형식 버전입니다.', stylePackNameInvalid: '유효한 스타일 이름을 입력하세요.', stylePackContentInvalid: '스타일 내용이 너무 길거나 유효하지 않습니다.', stylePackNameConflict: '같은 이름의 스타일이 이미 있습니다.', stylePackFileReadFailed: '선택한 파일을 읽을 수 없습니다.', stylePackFileWriteFailed: '스타일 팩 파일을 저장할 수 없습니다.', unknown: '스타일 작업에 실패했습니다. 다시 시도하세요.' },
+  },
+  selectionPolish: {
+    title: '선택 영역 다듬기', processing: '다듬은 미리보기를 생성하는 중…', result: '다듬기 결과', replace: '선택 영역 바꾸기', errorFallback: '선택 영역 다듬기에 실패했습니다.', enable: '활성화', disable: '비활성화', hotkey: '선택 영역 다듬기 단축키', outputMode: '선택 영역 다듬기 출력', previewConfirm: '미리보기 후 확인', directReplace: '바로 바꾸기',
+    errors: { selectionPolishTargetUnavailable: '원래 선택 영역을 찾을 수 없습니다. 다시 선택해 주세요.', selectionPolishSecureInput: '보안 입력 컨트롤은 읽거나 바꿀 수 없습니다.', selectionPolishUnknownTarget: '컨트롤의 안전성을 확인할 수 없어 읽기를 차단했습니다.', selectionPolishNoSelection: '선택된 텍스트가 없습니다.', selectionPolishProviderFailed: '모델 제공업체에서 결과를 생성하지 못했습니다.', selectionPolishCancelled: '선택 영역 다듬기를 취소했습니다.', selectionPolishCopyFailed: '다듬은 결과를 복사하지 못했습니다.', selectionPolishPreviewUnavailable: '미리보기가 만료되었습니다. 다시 생성해 주세요.', selectionPolishEmptyResult: '결과가 비어 있어 바꾸지 않았습니다.', selectionPolishInsertFailed: '바꾸기에 실패했습니다. 결과는 복사할 수 있습니다.', selectionPolishSelectionChanged: '선택 텍스트가 바뀌어 교체하지 않았습니다.', selectionPolishTargetChanged: '포커스 컨트롤이 바뀌어 교체하지 않았습니다.' },
   },
   translation: {
     kicker: 'TRANSLATION',

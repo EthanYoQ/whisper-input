@@ -35,6 +35,7 @@ pub mod qingyu_sidecar_protocol;
 mod recorder;
 mod selection;
 mod shortcut_binding;
+mod style_packs;
 mod types;
 mod unicode_keystroke;
 mod windows_hotkey_core;
@@ -60,8 +61,6 @@ use tauri::menu::{
 };
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, RunEvent, Runtime};
-
-use crate::types::PolishMode;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -290,6 +289,8 @@ pub fn run() {
             commands::get_usage_stats,
             commands::delete_history_entry,
             commands::clear_history,
+            commands::repolish_history_entry,
+            commands::reinsert_history_entry,
             commands::clear_local_cache,
             commands::clear_provider_configuration,
             commands::delete_qingyu_asr_model,
@@ -310,9 +311,18 @@ pub fn run() {
             commands::handle_window_hotkey_event,
             #[cfg(debug_assertions)]
             commands::inject_hotkey_click_for_dev,
-            commands::repolish,
             commands::set_default_polish_mode,
             commands::set_style_enabled,
+            commands::list_style_packs,
+            commands::create_style_pack,
+            commands::update_style_pack,
+            commands::duplicate_style_pack,
+            commands::set_style_pack_enabled,
+            commands::activate_style_pack,
+            commands::delete_style_pack,
+            commands::preview_style_pack,
+            commands::import_style_pack_file,
+            commands::export_style_pack_file,
             commands::check_accessibility_permission,
             commands::request_accessibility_permission,
             commands::check_microphone_permission,
@@ -331,6 +341,11 @@ pub fn run() {
             commands::set_open_app_hotkey,
             commands::qa_window_dismiss,
             commands::qa_window_pin,
+            commands::start_selection_polish,
+            commands::cancel_selection_polish,
+            commands::confirm_selection_polish,
+            commands::copy_selection_polish,
+            commands::set_selection_polish_preferences,
             commands::validate_combo_hotkey,
             commands::set_combo_hotkey,
             commands::validate_provider_credentials,
@@ -380,6 +395,7 @@ pub fn run() {
                 }
                 coordinator.start_switch_style_hotkey_listener();
                 coordinator.start_open_app_hotkey_listener();
+                coordinator.start_selection_polish_hotkey_listener();
             }
             #[cfg(target_os = "macos")]
             RunEvent::Reopen { .. } => show_main_window(app),
@@ -410,6 +426,7 @@ pub fn run() {
                 coordinator.stop_translation_hotkey_listener();
                 coordinator.stop_switch_style_hotkey_listener();
                 coordinator.stop_open_app_hotkey_listener();
+                coordinator.stop_selection_polish_hotkey_listener();
             }
             _ => {}
         });
@@ -430,10 +447,10 @@ struct TrayMenu {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct TrayPolishModeMenuEntry {
+struct TrayStyleMenuEntry {
     id: String,
-    label: &'static str,
-    mode: PolishMode,
+    label: String,
+    style_id: String,
     checked: bool,
 }
 
@@ -441,31 +458,25 @@ fn tray_style_menu_enabled() -> bool {
     cfg!(target_os = "windows")
 }
 
-fn tray_polish_mode_menu_entries(selected: PolishMode) -> Vec<TrayPolishModeMenuEntry> {
-    [
-        (PolishMode::Raw, "style-raw"),
-        (PolishMode::Light, "style-light"),
-        (PolishMode::Structured, "style-structured"),
-        (PolishMode::Formal, "style-formal"),
-    ]
-    .into_iter()
-    .map(|(mode, id)| TrayPolishModeMenuEntry {
-        id: id.to_string(),
-        label: mode.display_name(),
-        mode,
-        checked: mode == selected,
-    })
-    .collect()
+fn tray_style_menu_entries(
+    snapshot: &crate::types::StylePackCatalogSnapshot,
+) -> Vec<TrayStyleMenuEntry> {
+    snapshot
+        .packs
+        .iter()
+        .filter(|pack| snapshot.enabled_style_ids.contains(&pack.id))
+        .map(|pack| TrayStyleMenuEntry {
+            id: format!("style-pack::{}", pack.id),
+            label: pack.name.clone(),
+            style_id: pack.id.clone(),
+            checked: pack.id == snapshot.active_style_id,
+        })
+        .collect()
 }
 
-fn parse_tray_polish_mode_id(id: &str) -> Option<PolishMode> {
-    match id {
-        "style-raw" => Some(PolishMode::Raw),
-        "style-light" => Some(PolishMode::Light),
-        "style-structured" => Some(PolishMode::Structured),
-        "style-formal" => Some(PolishMode::Formal),
-        _ => None,
-    }
+fn parse_tray_style_id(id: &str) -> Option<&str> {
+    id.strip_prefix("style-pack::")
+        .filter(|value| !value.is_empty())
 }
 
 fn build_tray_menu<M: Manager<tauri::Wry>>(
@@ -499,10 +510,10 @@ fn build_style_tray_menu<M: Manager<tauri::Wry>>(
     app: &M,
     coordinator: &Arc<coordinator::Coordinator>,
 ) -> tauri::Result<StyleTrayMenu> {
-    let selected = coordinator.prefs().get().default_mode;
+    let snapshot = coordinator.style_packs().snapshot();
     let mut submenu = SubmenuBuilder::with_id(app, "style", "输出风格");
-    for entry in tray_polish_mode_menu_entries(selected) {
-        let item = CheckMenuItemBuilder::with_id(&entry.id, entry.label)
+    for entry in tray_style_menu_entries(&snapshot) {
+        let item = CheckMenuItemBuilder::with_id(&entry.id, &entry.label)
             .checked(entry.checked)
             .build(app)?;
         submenu = submenu.item(&item);
@@ -649,18 +660,18 @@ fn handle_microphone_tray_menu_event(app: &AppHandle, id: &str) {
 }
 
 fn handle_style_tray_menu_event(app: &AppHandle, id: &str) -> bool {
-    let Some(mode) = parse_tray_polish_mode_id(id) else {
+    let Some(style_id) = parse_tray_style_id(id) else {
         return false;
     };
     let coord = app.state::<Arc<coordinator::Coordinator>>();
-    let mut prefs = coord.prefs().get();
-    prefs.default_mode = mode;
-    if let Err(err) = coord.prefs().set(prefs.clone()) {
-        log::warn!("[tray] save polish mode preference failed: {err}");
+    if let Err(err) = coord.style_packs().activate(style_id) {
+        log::warn!("[tray] activate style pack failed: {err}");
         return true;
     }
+    let prefs = coord.settings_snapshot();
     let _ = app.emit("prefs:changed", &prefs);
     let _ = app.emit_to("main", "prefs:changed", &prefs);
+    let _ = app.emit("style-packs:changed", coord.style_packs().snapshot());
     if let Err(err) = refresh_tray_microphone_menu(app) {
         log::warn!("[tray] refresh style menu after polish mode change failed: {err}");
     }
@@ -925,8 +936,8 @@ fn activate_app<R: Runtime>(app: &AppHandle<R>) {
 #[cfg(not(target_os = "macos"))]
 fn activate_app<R: Runtime>(_app: &AppHandle<R>) {}
 
-/// 展示胶囊后调用：若 OpenLess 已是前台 app，用 makeKeyWindow 还原主窗口焦点。
-/// 不调 NSApp.activate，不抢其他 app 焦点，符合 CLAUDE.md 约束。
+/// 展示胶囊后调用：应用已在前台时用 makeKeyWindow 还原主窗口焦点。
+/// 此操作不激活应用，因此不会从其他应用抢走焦点。
 #[cfg(target_os = "macos")]
 pub(crate) fn restore_main_window_key_if_active<R: Runtime>(app: &AppHandle<R>) {
     let main = app.get_webview_window("main");
@@ -1220,11 +1231,11 @@ fn capsule_height_for_qa() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        capsule_height_for_qa, capsule_visual_height, capsule_window_bounds,
-        parse_tray_polish_mode_id, rotate_log_if_too_large, tray_polish_mode_menu_entries,
-        tray_style_menu_enabled, LOG_ROTATE_LIMIT_BYTES,
+        capsule_height_for_qa, capsule_visual_height, capsule_window_bounds, parse_tray_style_id,
+        rotate_log_if_too_large, tray_style_menu_enabled, tray_style_menu_entries,
+        LOG_ROTATE_LIMIT_BYTES,
     };
-    use crate::types::PolishMode;
+    use crate::types::{PolishMode, StylePack, StylePackCatalogSnapshot, StylePackKind};
     use std::io::Write;
 
     #[test]
@@ -1238,18 +1249,63 @@ mod tests {
 
     #[test]
     fn tray_style_menu_lists_builtin_modes_in_expected_order() {
-        let entries = tray_polish_mode_menu_entries(PolishMode::Structured);
+        let packs = [
+            ("builtin.raw", "原始转写", PolishMode::Raw),
+            ("builtin.light", "轻度润色", PolishMode::Light),
+            ("builtin.structured", "清晰结构", PolishMode::Structured),
+            ("builtin.formal", "正式表达", PolishMode::Formal),
+        ]
+        .into_iter()
+        .map(|(id, name, base_mode)| StylePack {
+            id: id.into(),
+            name: name.into(),
+            description: String::new(),
+            kind: StylePackKind::Builtin,
+            base_mode,
+            dictation_prompt: String::new(),
+            selection_prompt: String::new(),
+            examples: Vec::new(),
+            created_at: String::new(),
+            updated_at: String::new(),
+        })
+        .collect::<Vec<_>>();
+        let snapshot = StylePackCatalogSnapshot {
+            enabled_style_ids: packs.iter().map(|pack| pack.id.clone()).collect(),
+            active_style_id: "builtin.structured".into(),
+            packs,
+        };
+        let entries = tray_style_menu_entries(&snapshot);
 
         assert_eq!(
             entries
                 .iter()
-                .map(|entry| (entry.id.as_str(), entry.label, entry.mode, entry.checked))
+                .map(|entry| (
+                    entry.id.as_str(),
+                    entry.label.as_str(),
+                    entry.style_id.as_str(),
+                    entry.checked
+                ))
                 .collect::<Vec<_>>(),
             vec![
-                ("style-raw", "原文", PolishMode::Raw, false),
-                ("style-light", "轻度润色", PolishMode::Light, false),
-                ("style-structured", "清晰结构", PolishMode::Structured, true),
-                ("style-formal", "正式表达", PolishMode::Formal, false),
+                ("style-pack::builtin.raw", "原始转写", "builtin.raw", false),
+                (
+                    "style-pack::builtin.light",
+                    "轻度润色",
+                    "builtin.light",
+                    false
+                ),
+                (
+                    "style-pack::builtin.structured",
+                    "清晰结构",
+                    "builtin.structured",
+                    true
+                ),
+                (
+                    "style-pack::builtin.formal",
+                    "正式表达",
+                    "builtin.formal",
+                    false
+                ),
             ]
         );
     }
@@ -1257,23 +1313,16 @@ mod tests {
     #[test]
     fn tray_style_menu_id_parsing_accepts_only_style_items() {
         assert_eq!(
-            parse_tray_polish_mode_id("style-raw"),
-            Some(PolishMode::Raw)
+            parse_tray_style_id("style-pack::builtin.raw"),
+            Some("builtin.raw")
         );
         assert_eq!(
-            parse_tray_polish_mode_id("style-light"),
-            Some(PolishMode::Light)
+            parse_tray_style_id("style-pack::custom.test"),
+            Some("custom.test")
         );
-        assert_eq!(
-            parse_tray_polish_mode_id("style-structured"),
-            Some(PolishMode::Structured)
-        );
-        assert_eq!(
-            parse_tray_polish_mode_id("style-formal"),
-            Some(PolishMode::Formal)
-        );
-        assert_eq!(parse_tray_polish_mode_id("toggle"), None);
-        assert_eq!(parse_tray_polish_mode_id("mic-default"), None);
+        assert_eq!(parse_tray_style_id("style-pack::"), None);
+        assert_eq!(parse_tray_style_id("toggle"), None);
+        assert_eq!(parse_tray_style_id("mic-default"), None);
     }
 
     #[test]

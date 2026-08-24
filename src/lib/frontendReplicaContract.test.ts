@@ -64,13 +64,13 @@ assert(
 );
 
 assert(
-  HISTORY_ROW_ACTION_LABELS.join(',') === '复制,删除',
-  `history row actions should only expose copy/delete, got ${HISTORY_ROW_ACTION_LABELS.join(',')}`,
+  HISTORY_ROW_ACTION_LABELS.join(',') === '重新润色,重新插入,复制,删除',
+  `history row actions should expose derived actions plus copy/delete, got ${HISTORY_ROW_ACTION_LABELS.join(',')}`,
 );
 
 assert(
-  FORBIDDEN_HISTORY_ACTIONS.includes('重新润色'),
-  '历史页必须禁止重新润色',
+  FORBIDDEN_HISTORY_ACTIONS.length === 0,
+  'approved history actions must not remain forbidden',
 );
 
 for (const label of FORBIDDEN_HISTORY_ACTIONS) {

@@ -67,7 +67,8 @@ flowchart LR
   E --> F{"Insertion Successful?"}
   F -->|Yes| G["✅ Done"]
   F -->|No| H["📋 Copy to Clipboard"]
-  H --> I["🕘 Save to History"]
+  G --> I["🕘 Save to History When Enabled"]
+  H --> I
 ```
 
 No need to switch input methods, open a chat window, or copy and paste manually.  
@@ -251,9 +252,9 @@ flowchart TB
 | 📝 ASR Text | Sent to your configured LLM service |
 | 🕘 History | Saved locally by default |
 | 📚 User Dictionary | Saved locally by default |
-| Cloud service configuration | Stored in local config, can be cleared |
+| Cloud service credentials | Windows Credential Manager / macOS Keychain / Linux keyring, and can be cleared |
 
-You can clear history, dictionary, and API configuration from the settings.
+You can clear history, dictionary, and cloud service credentials from Settings. Legacy plaintext configuration is only a migration source, never the destination for new credentials.
 
 ---
 

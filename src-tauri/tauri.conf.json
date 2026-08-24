@@ -64,6 +64,23 @@
         "visible": false,
         "center": false,
         "acceptFirstMouse": true
+      },
+      {
+        "label": "selection-polish",
+        "url": "index.html?window=selection-polish",
+        "title": "Whisper Input Selection Polish",
+        "width": 480,
+        "height": 380,
+        "decorations": false,
+        "transparent": true,
+        "shadow": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": true,
+        "focus": true,
+        "visible": false,
+        "center": true,
+        "acceptFirstMouse": true
       }
     ],
     "security": {

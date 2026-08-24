@@ -235,6 +235,7 @@ export const zhTW: typeof zhCN = {
     pasteSent: '已嘗試粘貼',
     copiedFallback: '已複製(需 {{shortcut}})',
     insertFailed: '插入失敗',
+    generatedResult: '已產生新結果', notSaved: '未儲存', repolish: '重新潤飾', reinsert: '重新插入',
     confirmClear: '確定清空全部 {{count}} 條記錄？此操作不可恢復。',
   },
   vocab: {
@@ -286,6 +287,14 @@ export const zhTW: typeof zhCN = {
       structured: { name: '清晰結構', desc: '將口語內容整理成編號結構，例如 1、2、3、1.1、1.2、2.1。', sample: '1. 檢查登入\n2. 修復設定\n2.1 API Key 按鈕\n2.2 關於頁內容' },
       formal: { name: '正式表達', desc: '將口語轉成正式郵件或公文表達，去除口頭語，補齊稱呼、正文、結束語。', sample: '王經理您好：\n這個版本今天已經測試完成，麻煩您明天查看。\n謝謝。' },
     },
+  },
+  stylePacks: {
+    loading: '正在載入本機風格包', currentDescription: '目前：{{name}}。自訂風格僅保存在本機。', new: '新增風格', builtin: '內建', local: '本機', active: '目前', use: '使用', duplicate: '複製', edit: '編輯', disable: '停用', enable: '啟用', saveFile: '儲存檔案', editCustom: '編輯自訂風格', createCustom: '建立自訂風格', name: '名稱', description: '說明', dictationPrompt: '聽寫附加提示詞', selectionPrompt: '選區潤飾附加提示詞', examplesJson: '風格範例 JSON', examplesJsonInvalid: '範例必須是 JSON 陣列', save: '儲存', cancelEdit: '取消編輯', previewTitle: '儲存前預覽', previewDisclosure: '預覽文字、目前草稿和風格範例會傳送給目前設定的模型服務商；不會儲存、啟用、插入或寫入歷史。', previewDictation: '聽寫預覽', previewSelection: '選區潤飾預覽', previewDefaultInput: '請將這段文字整理成適合職場溝通的表達', previewAction: '使用目前模型預覽', previewResult: '預覽結果', importFile: '匯入檔案',
+    errors: { stylePackReadonlyOrNotFound: '此風格為唯讀或已不存在。', stylePackNotFound: '找不到該風格包。', stylePackBuiltinReadonly: '內建風格為唯讀，請先複製再編輯。', stylePackDisabled: '請先啟用該風格再使用。', stylePackExportFailed: '無法匯出風格包。', stylePackImportInvalid: '所選檔案不是有效的風格包。', stylePackImportVersion: '此風格包使用不支援的格式版本。', stylePackNameInvalid: '請輸入有效且非空的風格名稱。', stylePackContentInvalid: '一個或多個風格欄位過長或無效。', stylePackNameConflict: '已存在同名風格。', stylePackFileReadFailed: '無法讀取所選風格包檔案。', stylePackFileWriteFailed: '無法儲存風格包檔案。', unknown: '風格操作失敗，請重試。' },
+  },
+  selectionPolish: {
+    title: '選區潤飾', processing: '正在產生潤飾預覽…', result: '潤飾結果', replace: '替換選區', errorFallback: '選區潤飾失敗。', enable: '啟用', disable: '停用', hotkey: '選區潤飾快捷鍵', outputMode: '選區潤飾輸出', previewConfirm: '預覽確認', directReplace: '直接替換',
+    errors: { selectionPolishTargetUnavailable: '無法定位原選區，請重新選取後再試。', selectionPolishSecureInput: '安全輸入控制項不允許讀取或替換。', selectionPolishUnknownTarget: '無法確認控制項安全性，已阻止讀取。', selectionPolishNoSelection: '未讀取到選取文字。', selectionPolishProviderFailed: '模型服務商產生失敗。', selectionPolishCancelled: '選區潤飾已取消。', selectionPolishCopyFailed: '複製潤飾結果失敗。', selectionPolishPreviewUnavailable: '潤飾預覽已失效，請重新產生。', selectionPolishEmptyResult: '潤飾結果為空，未替換選區。', selectionPolishInsertFailed: '替換失敗，結果仍可複製。', selectionPolishSelectionChanged: '選區內容已變更，未執行替換。', selectionPolishTargetChanged: '焦點控制項已變更，未執行替換。' },
   },
   translation: {
     kicker: 'TRANSLATION',

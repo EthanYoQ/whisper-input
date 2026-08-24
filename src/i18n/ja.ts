@@ -218,6 +218,7 @@ export const ja: typeof zhCN = {
     pasteSent: '貼り付けを試行',
     copiedFallback: 'コピー済み（要 {{shortcut}}）',
     insertFailed: '入力失敗',
+    generatedResult: '新しい結果を生成しました', notSaved: '未保存', repolish: '再度整える', reinsert: '再挿入',
     confirmClear: '全 {{count}} 件の記録を削除しますか？この操作は取り消せません。',
   },
   vocab: {
@@ -269,6 +270,14 @@ export const ja: typeof zhCN = {
       structured: { name: '明確な構造', desc: '話し言葉を 1、2、3、1.1、1.2、2.1 のような番号付き構造に整理します。', sample: '1. ログインを確認\n2. 設定を修正\n2.1 API Key ボタン\n2.2 情報ページの内容' },
       formal: { name: '正式な表現', desc: '話し言葉を正式なメールまたは公文書の表現に変え、フィラーを除去し、宛名、本文、結びを補います。', sample: '王マネージャー\n本日、このバージョンのテストが完了しました。明日ご確認ください。\nよろしくお願いいたします。' },
     },
+  },
+  stylePacks: {
+    loading: 'ローカルスタイルパックを読み込み中', currentDescription: '現在：{{name}}。カスタムスタイルはこの端末だけに保存されます。', new: '新規スタイル', builtin: '組み込み', local: 'ローカル', active: '現在', use: '使用', duplicate: '複製', edit: '編集', disable: '無効化', enable: '有効化', saveFile: 'ファイルに保存', editCustom: 'カスタムスタイルを編集', createCustom: 'カスタムスタイルを作成', name: '名前', description: '説明', dictationPrompt: '音声入力用の追加プロンプト', selectionPrompt: '選択範囲の推敲用追加プロンプト', examplesJson: 'スタイル例 JSON', examplesJsonInvalid: '例は JSON 配列で指定してください', save: '保存', cancelEdit: '編集をキャンセル', previewTitle: '保存前プレビュー', previewDisclosure: 'プレビュー文、現在の下書き、スタイル例は設定中のモデル事業者へ送信されます。保存、適用、挿入、履歴追加は行いません。', previewDictation: '音声入力プレビュー', previewSelection: '選択範囲の推敲プレビュー', previewDefaultInput: 'この文章を職場で伝わりやすい表現に整えてください', previewAction: '現在のモデルでプレビュー', previewResult: 'プレビュー結果', importFile: 'ファイルをインポート',
+    errors: { stylePackReadonlyOrNotFound: 'このスタイルは読み取り専用か存在しません。', stylePackNotFound: 'スタイルパックが見つかりません。', stylePackBuiltinReadonly: '組み込みスタイルは読み取り専用です。複製してから編集してください。', stylePackDisabled: '使用する前にスタイルを有効にしてください。', stylePackExportFailed: 'スタイルパックを出力できませんでした。', stylePackImportInvalid: '有効なスタイルパックファイルではありません。', stylePackImportVersion: '未対応の形式バージョンです。', stylePackNameInvalid: '有効なスタイル名を入力してください。', stylePackContentInvalid: 'スタイルの内容が長すぎるか無効です。', stylePackNameConflict: '同じ名前のスタイルが既にあります。', stylePackFileReadFailed: '選択したファイルを読み取れませんでした。', stylePackFileWriteFailed: 'スタイルパックファイルを保存できませんでした。', unknown: 'スタイル操作に失敗しました。もう一度お試しください。' },
+  },
+  selectionPolish: {
+    title: '選択範囲を推敲', processing: '推敲プレビューを生成中…', result: '推敲結果', replace: '選択範囲を置換', errorFallback: '選択範囲の推敲に失敗しました。', enable: '有効化', disable: '無効化', hotkey: '選択範囲推敲のショートカット', outputMode: '選択範囲推敲の出力', previewConfirm: 'プレビューして確認', directReplace: '直接置換',
+    errors: { selectionPolishTargetUnavailable: '元の選択範囲を特定できません。選択し直してください。', selectionPolishSecureInput: '安全な入力欄は読み取りや置換ができません。', selectionPolishUnknownTarget: 'コントロールの安全性を確認できないため、読み取りを停止しました。', selectionPolishNoSelection: '選択された文字が見つかりません。', selectionPolishProviderFailed: 'モデル事業者で結果を生成できませんでした。', selectionPolishCancelled: '選択範囲の推敲をキャンセルしました。', selectionPolishCopyFailed: '推敲結果をコピーできませんでした。', selectionPolishPreviewUnavailable: 'プレビューの有効期限が切れました。再生成してください。', selectionPolishEmptyResult: '結果が空のため置換しませんでした。', selectionPolishInsertFailed: '置換に失敗しました。結果はコピーできます。', selectionPolishSelectionChanged: '選択文字が変わったため置換しませんでした。', selectionPolishTargetChanged: 'フォーカス先が変わったため置換しませんでした。' },
   },
   translation: {
     kicker: 'TRANSLATION',

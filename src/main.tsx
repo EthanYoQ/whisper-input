@@ -10,13 +10,18 @@ const params = new URLSearchParams(window.location.search);
 const windowKind = params.get("window");
 const isCapsule = windowKind === "capsule";
 const isQa = windowKind === "qa";
+const isSelectionPolish = windowKind === "selection-polish";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 
 const renderApp = () => {
   root.render(
     <React.StrictMode>
-      <App isCapsule={isCapsule} isQa={isQa} />
+      <App
+        isCapsule={isCapsule}
+        isQa={isQa}
+        isSelectionPolish={isSelectionPolish}
+      />
     </React.StrictMode>,
   );
 };

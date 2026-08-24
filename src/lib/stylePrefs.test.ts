@@ -37,6 +37,8 @@ const previousPrefs: UserPreferences = {
   outputLanguagePreference: 'auto',
   outputLanguagePreferenceExplicit: false,
   qaHotkey: null,
+  selectionPolishHotkey: null,
+  selectionPolishOutputMode: 'previewConfirm',
   historyEnabled: true,
   qaSaveHistory: false,
   customComboHotkey: null,

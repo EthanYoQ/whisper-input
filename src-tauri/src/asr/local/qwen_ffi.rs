@@ -14,8 +14,7 @@ pub struct QwenCtx {
 /// `typedef void (*qwen_token_cb)(const char *piece, void *userdata);`
 pub type QwenTokenCb = unsafe extern "C" fn(piece: *const c_char, userdata: *mut c_void);
 
-// 用经典 `extern "C"` block 而非 `unsafe extern "C"` block — 后者需 Rust
-// 1.82+；CLAUDE.md 声明 rust-version = "1.77"，避免给二次贡献者制造毛刺。
+// crate 支持 Rust 1.77；`unsafe extern "C"` block 需要 Rust 1.82+。
 extern "C" {
     pub fn qwen_load(model_dir: *const c_char) -> *mut QwenCtx;
     pub fn qwen_free(ctx: *mut QwenCtx);

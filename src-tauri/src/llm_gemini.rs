@@ -18,7 +18,8 @@ use std::time::{Duration, Instant};
 use serde_json::{json, Value};
 
 use crate::polish::{
-    clean_polish_output, compose_polish_prompts, compose_qa_system_prompt,
+    clean_polish_output, compose_polish_prompts, compose_polish_prompts_with_style,
+    compose_qa_system_prompt, compose_selection_polish_prompts_with_style,
     compose_translate_prompts, normalize_polish_layout, safe_str_slice, LLMError,
 };
 use crate::types::{ChineseScriptPreference, OutputLanguagePreference, PolishMode, QaChatMessage};
@@ -90,7 +91,33 @@ impl GeminiProvider {
         front_app: Option<&str>,
         prior_turns: &[(String, String)],
     ) -> Result<String, LLMError> {
-        let (system_prompt, user_prompt) = compose_polish_prompts(
+        self.polish_with_style(
+            raw_text,
+            mode,
+            hotwords,
+            working_languages,
+            chinese_script_preference,
+            output_language_preference,
+            front_app,
+            prior_turns,
+            None,
+        )
+        .await
+    }
+
+    pub async fn polish_with_style(
+        &self,
+        raw_text: &str,
+        mode: PolishMode,
+        hotwords: &[String],
+        working_languages: &[String],
+        chinese_script_preference: ChineseScriptPreference,
+        output_language_preference: OutputLanguagePreference,
+        front_app: Option<&str>,
+        prior_turns: &[(String, String)],
+        additional_style_prompt: Option<&str>,
+    ) -> Result<String, LLMError> {
+        let (system_prompt, user_prompt) = compose_polish_prompts_with_style(
             raw_text,
             mode,
             hotwords,
@@ -99,6 +126,7 @@ impl GeminiProvider {
             output_language_preference,
             front_app,
             !prior_turns.is_empty(),
+            additional_style_prompt,
         );
 
         let contents = build_polish_history_contents(prior_turns, &user_prompt);
@@ -112,6 +140,38 @@ impl GeminiProvider {
             prior_turns.len()
         );
 
+        let body_text = self.send_unary(&url, &body).await?;
+        let raw = extract_assistant_content(&body_text)?;
+        Ok(normalize_polish_layout(mode, &clean_polish_output(&raw)))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn polish_selection_with_style(
+        &self,
+        selected_text: &str,
+        mode: PolishMode,
+        hotwords: &[String],
+        working_languages: &[String],
+        chinese_script_preference: ChineseScriptPreference,
+        output_language_preference: OutputLanguagePreference,
+        front_app: Option<&str>,
+        additional_style_prompt: Option<&str>,
+    ) -> Result<String, LLMError> {
+        let (system_prompt, user_prompt) = compose_selection_polish_prompts_with_style(
+            selected_text,
+            mode,
+            hotwords,
+            working_languages,
+            chinese_script_preference,
+            output_language_preference,
+            front_app,
+            additional_style_prompt,
+        );
+        let body = self.build_generate_body(
+            &system_prompt,
+            build_polish_history_contents(&[], &user_prompt),
+        );
+        let url = generate_content_url(&self.config.base_url, &self.config.model);
         let body_text = self.send_unary(&url, &body).await?;
         let raw = extract_assistant_content(&body_text)?;
         Ok(normalize_polish_layout(mode, &clean_polish_output(&raw)))

@@ -8,6 +8,7 @@ import { APP_VERSION_LABEL } from '../lib/appVersion';
 import { isHotkeyModeMigrationNoticeActive } from '../lib/hotkeyMigration';
 import {
   defaultQaShortcut,
+  defaultAppShortcutModifiers,
   getHotkeyBindingCodes,
   getHotkeyBindingLabel,
   getHotkeyCodeLabel,
@@ -36,6 +37,7 @@ import {
   setDictationHotkey,
   setOpenAppHotkey,
   setQaHotkey,
+  setSelectionPolishPreferences,
   setSwitchStyleHotkey,
   setTranslationHotkey,
   startMicrophoneLevelMonitor,
@@ -2929,6 +2931,56 @@ function ShortcutsSection() {
           )}
         </SettingRow>
       )}
+      <SettingRow label={t('selectionPolish.hotkey')}>
+        {prefs.selectionPolishHotkey ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ShortcutRecorder
+              value={prefs.selectionPolishHotkey}
+              alignRecordButton
+              onSave={async binding => {
+                await setSelectionPolishPreferences(binding, prefs.selectionPolishOutputMode);
+                await savePrefs({ ...prefs, selectionPolishHotkey: binding });
+              }}
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                await setSelectionPolishPreferences(null, prefs.selectionPolishOutputMode);
+                await savePrefs({ ...prefs, selectionPolishHotkey: null });
+              }}
+              style={{ border: 0, background: 'transparent', color: 'var(--ol-ink-4)', fontSize: 12, minHeight: 40 }}
+            >
+              {t('selectionPolish.disable')}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={async () => {
+              const binding = { primary: 'P', modifiers: defaultAppShortcutModifiers() };
+              await setSelectionPolishPreferences(binding, prefs.selectionPolishOutputMode);
+              await savePrefs({ ...prefs, selectionPolishHotkey: binding });
+            }}
+            style={{ fontSize: 12, padding: '5px 14px', minHeight: 40, background: 'var(--ol-blue)', color: '#fff', border: 0, borderRadius: 6, fontFamily: 'inherit', fontWeight: 500 }}
+          >
+            {t('selectionPolish.enable')}
+          </button>
+        )}
+      </SettingRow>
+      <SettingRow label={t('selectionPolish.outputMode')}>
+        <select
+          value={prefs.selectionPolishOutputMode}
+          onChange={async event => {
+            const outputMode = event.target.value as typeof prefs.selectionPolishOutputMode;
+            await setSelectionPolishPreferences(prefs.selectionPolishHotkey, outputMode);
+            await savePrefs({ ...prefs, selectionPolishOutputMode: outputMode });
+          }}
+          style={{ minWidth: 160, minHeight: 40 }}
+        >
+          <option value="previewConfirm">{t('selectionPolish.previewConfirm')}</option>
+          <option value="directReplace">{t('selectionPolish.directReplace')}</option>
+        </select>
+      </SettingRow>
       <SettingRow label={t('settings.shortcuts.switchStyle')}>
         <ShortcutRecorder
           value={prefs.switchStyleHotkey}
