@@ -202,7 +202,15 @@ impl StylePackStore {
             } else {
                 catalog.enabled_style_ids.retain(|item| item != id);
                 if catalog.active_style_id == id {
-                    fallback_to_light(catalog);
+                    if id == BUILTIN_LIGHT_ID {
+                        if let Some(next_id) = catalog.enabled_style_ids.first().cloned() {
+                            catalog.active_style_id = next_id;
+                        } else {
+                            fallback_to_light(catalog);
+                        }
+                    } else {
+                        fallback_to_light(catalog);
+                    }
                 }
             }
             Ok(())
@@ -660,6 +668,27 @@ mod tests {
         );
         let copy = store.duplicate(BUILTIN_LIGHT_ID).unwrap();
         assert_eq!(copy.kind, StylePackKind::Custom);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn disabling_active_builtin_light_selects_an_enabled_style() {
+        let dir = test_scratch_dir("disable-active-light");
+        let store =
+            StylePackStore::with_dir_for_tests(dir.clone(), &UserPreferences::default()).unwrap();
+
+        store.set_enabled(BUILTIN_LIGHT_ID, false).unwrap();
+        let snapshot = store.snapshot();
+
+        assert_ne!(snapshot.active_style_id, BUILTIN_LIGHT_ID);
+        assert!(!snapshot
+            .enabled_style_ids
+            .iter()
+            .any(|id| id == BUILTIN_LIGHT_ID));
+        assert!(snapshot
+            .enabled_style_ids
+            .iter()
+            .any(|id| id == &snapshot.active_style_id));
         std::fs::remove_dir_all(dir).ok();
     }
 }
