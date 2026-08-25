@@ -8,9 +8,8 @@ use crate::diagnostics::{
     DiagnosticApp, DiagnosticAsr, DiagnosticInsertion, DiagnosticLlm, DiagnosticRecorderFacts,
     DiagnosticSession, DiagnosticTrace,
 };
-use crate::types::{
-    ChineseScriptPreference, HotkeyMode, OutputLanguagePreference, UserPreferences,
-};
+use crate::types::{HotkeyMode, OutputLanguagePreference, UserPreferences};
+use parking_lot::Mutex;
 
 use super::qa::handle_qa_option_edge;
 use super::resources::*;
@@ -67,7 +66,7 @@ fn diagnostic_insert_method(already_streamed: bool, focus_ready_for_paste: bool)
     if already_streamed {
         "streaming-unicode"
     } else if focus_ready_for_paste {
-        "clipboard-or-tsf"
+        "windows-unicode-or-clipboard"
     } else {
         "copy-fallback"
     }
@@ -308,7 +307,6 @@ enum StreamingPolishEligibility {
     Disabled,
     Translation,
     UnsupportedMode,
-    ChineseScriptTransform,
     CorrectionRules,
     ShortInputBypass,
     CustomStyle,
@@ -326,7 +324,6 @@ impl StreamingPolishEligibility {
             Self::Disabled => Some("disabled"),
             Self::Translation => Some("translation"),
             Self::UnsupportedMode => Some("unsupportedMode"),
-            Self::ChineseScriptTransform => Some("chineseScriptTransform"),
             Self::CorrectionRules => Some("correctionRules"),
             Self::ShortInputBypass => Some("shortInputBypass"),
             Self::CustomStyle => Some("customStyle"),
@@ -354,9 +351,8 @@ fn streaming_polish_eligibility(
     if mode != PolishMode::Light {
         return StreamingPolishEligibility::UnsupportedMode;
     }
-    if prefs.chinese_script_preference != ChineseScriptPreference::Auto {
-        return StreamingPolishEligibility::ChineseScriptTransform;
-    }
+    // Gemini 的 prompt 已明确要求简体/繁体输出。沿用 OpenLess 的流式策略：
+    // 不为整段本地字形转换阻塞首个润色片段上屏。
     if has_enabled_correction_rules {
         return StreamingPolishEligibility::CorrectionRules;
     }
@@ -372,8 +368,33 @@ fn streaming_polish_eligibility(
     StreamingPolishEligibility::Eligible
 }
 
+#[derive(Clone, Default)]
+struct StreamingInsertTiming {
+    first_llm_delta_at_ms: Option<u64>,
+    first_insert_at_ms: Option<u64>,
+}
+
 fn streaming_focus_matches(expected: Option<usize>, current: Option<usize>) -> bool {
     expected.is_some() && expected == current
+}
+
+fn should_force_chinese_script(
+    translation_path_active: bool,
+    short_transcript_llm_bypass: bool,
+    mode: PolishMode,
+    polish_failed: bool,
+    already_streamed: bool,
+) -> bool {
+    // `already_streamed` means the user has already seen this exact text. A local
+    // whole-text script conversion here would make persisted text diverge from it.
+    if already_streamed {
+        return false;
+    }
+    if translation_path_active {
+        polish_failed
+    } else {
+        short_transcript_llm_bypass || mode == PolishMode::Raw || polish_failed
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -411,13 +432,14 @@ fn tsf_experiment_enabled() -> bool {
 /// 3. 调 `polish_or_passthrough_streaming`，`on_delta` 把 chunk 塞进 mpsc。
 /// 4. 流结束 / 失败 / 取消 → drop mpsc 发送端 → typer 任务 drain 完剩余 delta 退出 →
 ///    `restore_input_source` 恢复用户原输入源（macOS 才有意义，其他平台 no-op）。
-/// 5. 返回 `(polished, polish_error, already_streamed)`：
+/// 5. 返回 `(polished, polish_error, already_streamed, timing)`：
 ///    - 成功：`(text, None, true)` — 字符已经在屏幕上，调用方应当跳过 `inserter.insert`
 ///    - 失败且已落字：保留实际落下的前缀并停止，不追加完整结果
 ///    - 失败且尚未落字：回到一次性插入路径
 ///    - 不支持：`run_streaming_polish` 内部直接调 `polish_or_passthrough` 透明降级
 ///
-/// 需要字形转换或确定性纠正规则时，会在首个 delta 前整段降级到一次性路径。
+/// 确定性纠正规则会在首个 delta 前整段降级到一次性路径；中文简繁偏好由 Gemini
+/// 提示词保证，因此不阻断首字上屏。
 #[allow(clippy::too_many_arguments)]
 async fn run_streaming_polish(
     inner: &Arc<Inner>,
@@ -430,7 +452,7 @@ async fn run_streaming_polish(
     llm_thinking_enabled: bool,
     front_app: Option<&str>,
     prior_turns: &[(String, String)],
-) -> (String, Option<String>, bool) {
+) -> (String, Option<String>, bool, StreamingInsertTiming) {
     log::info!(
         "[coord] streaming_insert path ENTER (raw_chars={})",
         raw.text.chars().count()
@@ -452,7 +474,7 @@ async fn run_streaming_polish(
             None,
         )
         .await;
-        return (p, e, false);
+        return (p, e, false, StreamingInsertTiming::default());
     };
 
     // 1. 切到 ABC 输入源。失败则降级 —— 流式路径上 CJK IME 拦截不是可恢复错误。
@@ -482,7 +504,7 @@ async fn run_streaming_polish(
                 None,
             )
             .await;
-            return (p, err, false);
+            return (p, err, false, StreamingInsertTiming::default());
         }
     };
 
@@ -491,7 +513,10 @@ async fn run_streaming_polish(
     // 与用户实际看到的内容一致；（b）pr-agent #412 反馈 \"saved output diverges
     // from what the user actually sees\"。
     let expected_focus_target = inner.state.lock().focus_target;
+    let session_started_at = inner.state.lock().started_at;
+    let timing = Arc::new(Mutex::new(StreamingInsertTiming::default()));
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let timing_for_typer = Arc::clone(&timing);
     let typer_handle = tokio::task::spawn_blocking(move || {
         let mut rx = rx;
         let mut typed_text = String::new();
@@ -508,6 +533,13 @@ async fn run_streaming_polish(
             }
             match crate::unicode_keystroke::type_unicode_chunk(&delta) {
                 Ok(()) => {
+                    if !delta.is_empty() {
+                        let mut timing = timing_for_typer.lock();
+                        if timing.first_insert_at_ms.is_none() {
+                            timing.first_insert_at_ms =
+                                Some(session_started_at.elapsed().as_millis() as u64);
+                        }
+                    }
                     typed_text.push_str(&delta);
                 }
                 Err(e) => {
@@ -534,6 +566,7 @@ async fn run_streaming_polish(
     );
     let inner_for_cancel = Arc::clone(inner);
     let should_cancel = move || inner_for_cancel.state.lock().cancelled;
+    let timing_for_delta = Arc::clone(&timing);
     let outcome = super::polish_or_passthrough_streaming(
         raw,
         mode,
@@ -545,6 +578,13 @@ async fn run_streaming_polish(
         front_app,
         prior_turns,
         move |delta: &str| {
+            if !delta.is_empty() {
+                let mut timing = timing_for_delta.lock();
+                if timing.first_llm_delta_at_ms.is_none() {
+                    timing.first_llm_delta_at_ms =
+                        Some(session_started_at.elapsed().as_millis() as u64);
+                }
+            }
             let _ = tx.send(delta.to_string());
         },
         should_cancel,
@@ -570,6 +610,7 @@ async fn run_streaming_polish(
     }
 
     // 6. 把 outcome 翻译成 (polished, polish_error, already_streamed)。
+    let timing = timing.lock().clone();
     match outcome {
         super::StreamingPolishOutcome::Streamed(text) => {
             log::info!(
@@ -588,7 +629,7 @@ async fn run_streaming_polish(
                     log::warn!(
                         "[coord] streaming_insert: zero chars typed despite polish success ({reason}); falling back to one-shot inserter"
                     );
-                    return (text, Some(reason), false);
+                    return (text, Some(reason), false, timing);
                 }
             }
             // 先确定 final_text —— typer 中途失败时屏幕只有 typed_text 这一段，
@@ -620,7 +661,7 @@ async fn run_streaming_polish(
             } else {
                 log::info!("[coord] streaming_insert: clipboard save skipped (pref off)");
             }
-            (final_text, polish_err, true)
+            (final_text, polish_err, true, timing)
         }
         super::StreamingPolishOutcome::UnsupportedFallback => {
             log::info!(
@@ -639,7 +680,7 @@ async fn run_streaming_polish(
                 None,
             )
             .await;
-            (p, e, false)
+            (p, e, false, timing)
         }
         super::StreamingPolishOutcome::Failed(reason) => {
             log::warn!(
@@ -656,9 +697,10 @@ async fn run_streaming_polish(
                         "streaming polish failed mid-stream after {typed_chars} chars: {reason}"
                     )),
                     true,
+                    timing,
                 )
             } else {
-                (raw.text.clone(), Some(reason), false)
+                (raw.text.clone(), Some(reason), false, timing)
             }
         }
     }
@@ -1524,7 +1566,8 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
         session_id
     };
 
-    let elapsed = inner.state.lock().started_at.elapsed().as_millis() as u64;
+    let session_started_at = inner.state.lock().started_at;
+    let elapsed = session_started_at.elapsed().as_millis() as u64;
     let asr_provider_id = CredentialsVault::get_active_asr();
     let llm_provider_id = CredentialsVault::get_active_llm();
     let trace_prefs = inner.prefs.get();
@@ -2004,6 +2047,7 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
             }
         }
     };
+    diagnostic_trace.asr.final_result_at_ms = Some(session_started_at.elapsed().as_millis() as u64);
 
     diagnostic_trace.recorder.estimated_duration_ms = Some(raw.duration_ms);
     diagnostic_trace.asr.raw_text = Some(raw.text.clone());
@@ -2213,14 +2257,13 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
 
     let focus_target = inner.state.lock().focus_target;
     let mut focus_ready_before_stream: Option<bool> = None;
-    let llm_start = Instant::now();
     diagnostic_trace.llm.short_input_bypass = short_transcript_llm_bypass;
     diagnostic_trace.llm.streaming_insert_eligible = streaming_eligible;
     diagnostic_trace.llm.streaming_fallback_reason =
         streaming_eligibility.fallback_reason().map(str::to_string);
-    diagnostic_trace.llm.started_at_ms = Some(elapsed);
+    diagnostic_trace.llm.started_at_ms = Some(session_started_at.elapsed().as_millis() as u64);
 
-    let (polished, polish_error, already_streamed) = if translation_active {
+    let (polished, polish_error, already_streamed, streaming_timing) = if translation_active {
         log::info!(
             "[coord] translation mode → target=\u{300C}{}\u{300D} working={:?} front_app={:?}",
             translation_target,
@@ -2237,7 +2280,7 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
             front_app.as_deref(),
         )
         .await;
-        (p, e, false)
+        (p, e, false, StreamingInsertTiming::default())
     } else if output_operation == DictationOutputOperation::TranslateToEnglish {
         log::info!(
             "[coord] output language preference translation → target=\u{300C}English\u{300D} working={:?} front_app={:?}",
@@ -2254,14 +2297,19 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
             front_app.as_deref(),
         )
         .await;
-        (p, e, false)
+        (p, e, false, StreamingInsertTiming::default())
     } else if short_transcript_llm_bypass {
         log::info!(
             "[coord] short transcript bypass: effective_chars={} threshold={} mode={mode:?}",
             effective_transcript_char_count(&raw.text),
             SHORT_TRANSCRIPT_LLM_BYPASS_CHAR_THRESHOLD
         );
-        (raw.text.clone(), None, false)
+        (
+            raw.text.clone(),
+            None,
+            false,
+            StreamingInsertTiming::default(),
+        )
     } else if streaming_eligible {
         let focus_ready = restore_focus_target_if_possible(focus_target);
         focus_ready_before_stream = Some(focus_ready);
@@ -2297,7 +2345,7 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
                 Some(&style.dictation_prompt),
             )
             .await;
-            (p, e, false)
+            (p, e, false, StreamingInsertTiming::default())
         }
     } else {
         let (p, e) = polish_or_passthrough(
@@ -2313,18 +2361,20 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
             Some(&style.dictation_prompt),
         )
         .await;
-        (p, e, false)
+        (p, e, false, StreamingInsertTiming::default())
     };
 
     // 仅在“ASR 直出文本”场景做强制简繁收敛，避免误伤成功的翻译/常规 LLM 输出：
     // - 非翻译模式：mode=Raw（只做最小整理）或润色失败回退 raw
     // - 翻译模式：仅翻译失败回退 raw 时才收敛
     let translation_path_active = translation_active || output_preference_translation_active;
-    let should_force_script = if translation_path_active {
-        polish_error.is_some()
-    } else {
-        short_transcript_llm_bypass || mode == PolishMode::Raw || polish_error.is_some()
-    };
+    let should_force_script = should_force_chinese_script(
+        translation_path_active,
+        short_transcript_llm_bypass,
+        mode,
+        polish_error.is_some(),
+        already_streamed,
+    );
     let polished = if should_force_script {
         apply_chinese_script_preference(&polished, chinese_script_preference)
     } else {
@@ -2343,8 +2393,8 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
         }
         corrected
     };
-    diagnostic_trace.llm.finished_at_ms =
-        Some(elapsed.saturating_add(llm_start.elapsed().as_millis() as u64));
+    diagnostic_trace.llm.finished_at_ms = Some(session_started_at.elapsed().as_millis() as u64);
+    diagnostic_trace.llm.first_delta_at_ms = streaming_timing.first_llm_delta_at_ms;
     diagnostic_trace.llm.error = polish_error.clone();
     diagnostic_trace.llm.final_text = Some(polished.clone());
     diagnostic_trace.llm.final_chars = Some(diagnostic_char_count(&polished));
@@ -2500,6 +2550,9 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
     diagnostic_trace.insertion.method =
         Some(diagnostic_insert_method(already_streamed, focus_ready_for_paste).to_string());
     diagnostic_trace.insertion.focus_restored = Some(focus_ready_for_paste);
+    diagnostic_trace.insertion.first_insert_at_ms = streaming_timing.first_insert_at_ms;
+    diagnostic_trace.insertion.completed_at_ms =
+        Some(session_started_at.elapsed().as_millis() as u64);
     append_diagnostic_trace(inner, diagnostic_trace);
 
     let done_message = if tsf_required_insert_failed {
@@ -2598,9 +2651,9 @@ mod tests {
     use super::{
         asr_transcript_has_no_speech, complete_trace_texts, diagnostic_insert_method,
         diagnostic_trace_for_test, dictation_output_operation, qingyu_local_asr_readiness_error,
-        should_bypass_llm_for_short_transcript, streaming_focus_matches,
-        streaming_polish_eligibility, DictationOutputOperation, StreamingPolishEligibility,
-        SHORT_TRANSCRIPT_LLM_BYPASS_CHAR_THRESHOLD,
+        should_bypass_llm_for_short_transcript, should_force_chinese_script,
+        streaming_focus_matches, streaming_polish_eligibility, DictationOutputOperation,
+        StreamingPolishEligibility, SHORT_TRANSCRIPT_LLM_BYPASS_CHAR_THRESHOLD,
     };
     use crate::types::{
         ChineseScriptPreference, InsertStatus, OutputLanguagePreference, PolishMode,
@@ -2610,7 +2663,10 @@ mod tests {
     #[test]
     fn diagnostic_insert_method_describes_streaming_and_clipboard_paths() {
         assert_eq!(diagnostic_insert_method(true, true), "streaming-unicode");
-        assert_eq!(diagnostic_insert_method(false, true), "clipboard-or-tsf");
+        assert_eq!(
+            diagnostic_insert_method(false, true),
+            "windows-unicode-or-clipboard"
+        );
         assert_eq!(diagnostic_insert_method(false, false), "copy-fallback");
     }
 
@@ -2765,25 +2821,30 @@ mod tests {
     }
 
     #[test]
-    fn streaming_insert_falls_back_before_output_when_transforms_are_required() {
-        let prefs = UserPreferences {
-            streaming_insert: true,
-            chinese_script_preference: ChineseScriptPreference::Traditional,
-            ..UserPreferences::default()
-        };
-        assert_eq!(
-            streaming_polish_eligibility(
-                &prefs,
-                false,
-                DictationOutputOperation::Polish,
-                PolishMode::Light,
-                false,
-                false,
-                false,
-                true,
-            ),
-            StreamingPolishEligibility::ChineseScriptTransform
-        );
+    fn streaming_insert_keeps_chinese_script_preference_on_prompt_guarantee() {
+        for chinese_script_preference in [
+            ChineseScriptPreference::Simplified,
+            ChineseScriptPreference::Traditional,
+        ] {
+            let prefs = UserPreferences {
+                streaming_insert: true,
+                chinese_script_preference,
+                ..UserPreferences::default()
+            };
+            assert_eq!(
+                streaming_polish_eligibility(
+                    &prefs,
+                    false,
+                    DictationOutputOperation::Polish,
+                    PolishMode::Light,
+                    false,
+                    false,
+                    false,
+                    true,
+                ),
+                StreamingPolishEligibility::Eligible
+            );
+        }
 
         let prefs = UserPreferences::default();
         assert_eq!(
@@ -2798,6 +2859,22 @@ mod tests {
                 true,
             ),
             StreamingPolishEligibility::CorrectionRules
+        );
+    }
+
+    #[test]
+    fn partial_streamed_text_is_never_post_processed_for_script_preference() {
+        assert!(
+            should_force_chinese_script(false, false, PolishMode::Light, true, false),
+            "zero-character stream failure keeps the one-shot fallback behavior"
+        );
+        assert!(
+            should_force_chinese_script(false, true, PolishMode::Light, false, false),
+            "ASR direct short-text output still honors the configured script preference"
+        );
+        assert!(
+            !should_force_chinese_script(false, false, PolishMode::Light, true, true),
+            "a partially typed stream must keep history and clipboard identical to screen text"
         );
     }
 
@@ -2863,7 +2940,7 @@ mod tests {
     fn streaming_insert_restores_focus_before_streaming_polish() {
         let source = include_str!("dictation.rs");
         let dispatch_start = source
-            .find("let (polished, polish_error, already_streamed) =")
+            .find("let (polished, polish_error, already_streamed, streaming_timing) =")
             .expect("polish dispatch assignment should exist");
         let streaming_call = source[dispatch_start..]
             .find("run_streaming_polish(")

@@ -2015,6 +2015,18 @@ fn insert_via_windows_default_path(
     allow_non_tsf_insertion_fallback: bool,
     paste_shortcut: PasteShortcut,
 ) -> InsertStatus {
+    // Ctrl+V only tells us that Windows received the shortcut. A focused target
+    // can still ignore it (notably while it is handling its own shortcut or
+    // clipboard operation), which previously left a misleading PasteSent
+    // history entry. SendInput's Unicode path avoids that clipboard hand-off
+    // and is the same injection method used by streaming Gemini output.
+    let unicode_status = inner.inserter.insert_via_unicode_keystrokes(polished);
+    if unicode_status == InsertStatus::Inserted {
+        log::info!("[windows-insertion] inserted via Unicode SendInput");
+        return InsertStatus::Inserted;
+    }
+
+    log::warn!("[windows-insertion] Unicode SendInput failed; falling back to clipboard paste");
     let paste_status =
         inner
             .inserter
@@ -2028,13 +2040,8 @@ fn insert_via_windows_default_path(
         return paste_status;
     }
 
-    if inner.inserter.insert_via_unicode_keystrokes(polished) == InsertStatus::Inserted {
-        log::info!("[windows-insertion] clipboard paste failed; inserted via Unicode SendInput");
-        return InsertStatus::Inserted;
-    }
-
     log::warn!(
-        "[windows-insertion] clipboard paste failed and Unicode SendInput failed; keeping final text on clipboard"
+        "[windows-insertion] Unicode SendInput and clipboard paste failed; keeping final text on clipboard"
     );
     inner.inserter.copy_fallback(polished)
 }

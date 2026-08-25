@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -79,6 +79,8 @@ pub struct DiagnosticAsr {
     pub frames_sent: Option<u64>,
     pub bytes_sent: Option<u64>,
     pub pending_sends: Option<u64>,
+    /// Session 开始后收到最终 ASR 文本的时间，用于分离 ASR 尾延迟与 LLM 延迟。
+    pub final_result_at_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -92,6 +94,8 @@ pub struct DiagnosticLlm {
     pub streaming_fallback_reason: Option<String>,
     pub started_at_ms: Option<u64>,
     pub finished_at_ms: Option<u64>,
+    /// Session 开始后收到首个流式 LLM 文本片段的时间。
+    pub first_delta_at_ms: Option<u64>,
     pub error: Option<String>,
     pub final_text: Option<String>,
     pub final_chars: Option<u32>,
@@ -103,6 +107,10 @@ pub struct DiagnosticInsertion {
     pub status: Option<String>,
     pub method: Option<String>,
     pub focus_restored: Option<bool>,
+    /// Session 开始后首个字符真正交给输入目标的时间。
+    pub first_insert_at_ms: Option<u64>,
+    /// Session 开始后本次输入链路完成的时间。
+    pub completed_at_ms: Option<u64>,
 }
 
 impl DiagnosticTrace {
@@ -323,13 +331,15 @@ impl DiagnosticStore {
             return Ok(DiagnosticRecords::default());
         }
 
-        let file = fs::File::open(&self.inner.path).context("open diagnostics file failed")?;
-        let reader = BufReader::new(file);
+        let bytes = fs::read(&self.inner.path).context("read diagnostics file failed")?;
         let mut traces = Vec::new();
         let mut malformed_lines = Vec::new();
 
-        for line in reader.lines() {
-            let line = line.context("read diagnostics line failed")?;
+        // A legacy/corrupted byte must not prevent every later trace from
+        // being recorded. Decode each line lossily so valid JSONL entries are
+        // retained and the malformed entry can be rewritten safely.
+        for raw_line in bytes.split(|byte| *byte == b'\n') {
+            let line = String::from_utf8_lossy(raw_line);
             if line.trim().is_empty() {
                 continue;
             }
@@ -337,7 +347,7 @@ impl DiagnosticStore {
                 Ok(trace) => traces.push(trace),
                 Err(err) => {
                     log::warn!("[diagnostics] preserving malformed trace line: {err}");
-                    malformed_lines.push(line);
+                    malformed_lines.push(line.into_owned());
                 }
             }
         }
@@ -507,6 +517,7 @@ mod tests {
                 frames_sent: Some(140),
                 bytes_sent: Some(896000),
                 pending_sends: Some(0),
+                final_result_at_ms: Some(29_100),
             },
             llm: DiagnosticLlm {
                 provider: Some("gemini".into()),
@@ -516,6 +527,7 @@ mod tests {
                 streaming_fallback_reason: None,
                 started_at_ms: Some(29200),
                 finished_at_ms: Some(32900),
+                first_delta_at_ms: Some(29_400),
                 error: None,
                 final_text: Some("final".into()),
                 final_chars: Some(5),
@@ -524,6 +536,8 @@ mod tests {
                 status: Some("PasteSent".into()),
                 method: Some("clipboard".into()),
                 focus_restored: Some(true),
+                first_insert_at_ms: Some(29_450),
+                completed_at_ms: Some(33_000),
             },
             flags: Vec::new(),
         }
@@ -666,6 +680,30 @@ mod tests {
         let traces = store.list_recent(10).unwrap();
         assert_eq!(traces.len(), 1);
         assert_eq!(traces[0].trace_id, "trace-valid");
+    }
+
+    #[test]
+    fn append_recovers_from_non_utf8_diagnostic_lines() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("diagnostics.jsonl");
+        fs::write(&path, b"{not-valid-json}\n\xff\n").unwrap();
+        let store = DiagnosticStore::with_path(path.clone());
+
+        let mut trace = sample_trace();
+        trace.trace_id = "trace-after-corruption".into();
+        store
+            .append_with_now(
+                trace,
+                chrono::DateTime::parse_from_rfc3339("2026-05-21T00:00:00Z")
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
+            )
+            .unwrap();
+
+        let traces = store.list_recent(10).unwrap();
+        assert_eq!(traces.len(), 1);
+        assert_eq!(traces[0].trace_id, "trace-after-corruption");
+        assert!(fs::read_to_string(&path).unwrap().contains('\u{fffd}'));
     }
 
     #[test]
