@@ -6,7 +6,7 @@ on:
       contract_path:
         description: 冻结的发布契约路径
         required: true
-        default: release-contracts/v1.5.1.json
+        default: release-contracts/v1.5.2.json
         type: string
 
 # Windows 构建与安装验收不得创建或修改 GitHub Release。

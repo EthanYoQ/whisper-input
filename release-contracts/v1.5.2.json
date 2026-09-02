@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "release": {
+    "tag": "v1.5.2",
+    "sourceCommit": "ee635ba3fb6df3b383c92cee5d4c2d8c4561b3fa",
+    "title": "Whisper Input v1.5.2",
+    "productName": "Whisper Input",
+    "macos": {
+      "target": "aarch64-apple-darwin",
+      "assets": [
+        "Whisper_Input_1.5.2_arm64.dmg",
+        "Whisper_Input_1.5.2_arm64.dmg.sha256"
+      ],
+      "minimumSystemVersion": "12.0",
+      "signingStatus": "unsigned-and-not-notarized"
+    },
+    "windows": {
+      "target": "x86_64-pc-windows-msvc",
+      "assets": [
+        "Whisper_Input_1.5.2_x64_setup.exe",
+        "Whisper_Input_1.5.2_x64_setup.exe.sha256",
+        "Whisper_Input_1.5.2_x64_en-US.msi",
+        "Whisper_Input_1.5.2_x64_en-US.msi.sha256",
+        "Whisper_Input_1.5.2_x64_portable.zip",
+        "Whisper_Input_1.5.2_x64_portable.zip.sha256"
+      ],
+      "upgradeBaseline": {
+        "tag": "v1.5.1",
+        "msiAsset": "Whisper_Input_1.5.1_x64_en-US.msi"
+      },
+      "signingStatus": "no-authenticode-signing-step-configured",
+      "installationScope": "perMachine"
+    }
+  }
+}
