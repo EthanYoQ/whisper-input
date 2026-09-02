@@ -9,6 +9,8 @@ pub const LEGACY_KEYRING_SERVICE_NAME: &str = "com.openless.app";
 pub const LOCAL_ASR_PROVIDER_ID: &str = "qingyu-local-fired-asr";
 pub const QWEN_REALTIME_ASR_PROVIDER_ID: &str = "qwen3-asr-flash-realtime";
 pub const DOUBAO_ASR_PROVIDER_ID: &str = "doubao-streaming-asr-2";
+pub const SILICONFLOW_ASR_PROVIDER_ID: &str = "siliconflow";
+pub const OPENAI_COMPATIBLE_ASR_PROVIDER_ID: &str = "whisper";
 pub const DEFAULT_ASR_PROVIDER_ID: &str = QWEN_REALTIME_ASR_PROVIDER_ID;
 pub const QWEN_LLM_PROVIDER_ID: &str = "qwen-llm";
 pub const DOUBAO_LLM_PROVIDER_ID: &str = "doubao-llm";
@@ -25,6 +27,8 @@ pub fn is_visible_active_asr_provider(id: &str) -> bool {
     let id = id.trim();
     id == QWEN_REALTIME_ASR_PROVIDER_ID
         || id == DOUBAO_ASR_PROVIDER_ID
+        || id == SILICONFLOW_ASR_PROVIDER_ID
+        || id == OPENAI_COMPATIBLE_ASR_PROVIDER_ID
         || (SHOW_LOCAL_ASR_EXPERIMENTS && id == LOCAL_ASR_PROVIDER_ID)
         || (SHOW_LOCAL_ASR_EXPERIMENTS && SHOW_QWEN_LOCAL_ASR && id == "local-qwen3")
         || (SHOW_LOCAL_ASR_EXPERIMENTS && SHOW_FOUNDRY_LOCAL_ASR && id == "foundry-local-whisper")
@@ -37,6 +41,10 @@ pub fn normalize_active_asr_provider_id(id: &str) -> String {
         }
         DOUBAO_ASR_PROVIDER_ID | "doubao" | "doubao-streaming" | "volcengine" => {
             DOUBAO_ASR_PROVIDER_ID.into()
+        }
+        SILICONFLOW_ASR_PROVIDER_ID | "silicon-flow" => SILICONFLOW_ASR_PROVIDER_ID.into(),
+        OPENAI_COMPATIBLE_ASR_PROVIDER_ID | "openai-compatible-asr" | "custom-asr" => {
+            OPENAI_COMPATIBLE_ASR_PROVIDER_ID.into()
         }
         LOCAL_ASR_PROVIDER_ID | "local-qwen3" | "foundry-local-whisper" => {
             if SHOW_LOCAL_ASR_EXPERIMENTS {
@@ -101,14 +109,17 @@ mod cloud_first_tests {
     }
 
     #[test]
-    fn normal_visible_asr_providers_are_qwen_and_doubao_only() {
+    fn normal_visible_asr_providers_include_advanced_compatible_asr() {
         assert!(is_visible_active_asr_provider(
             QWEN_REALTIME_ASR_PROVIDER_ID
         ));
         assert!(is_visible_active_asr_provider(DOUBAO_ASR_PROVIDER_ID));
+        assert!(is_visible_active_asr_provider(SILICONFLOW_ASR_PROVIDER_ID));
+        assert!(is_visible_active_asr_provider(
+            OPENAI_COMPATIBLE_ASR_PROVIDER_ID
+        ));
         assert!(!is_visible_active_asr_provider(LOCAL_ASR_PROVIDER_ID));
         assert!(!is_visible_active_asr_provider("bailian"));
-        assert!(!is_visible_active_asr_provider("whisper"));
         assert!(!is_visible_active_asr_provider("local-qwen3"));
         assert!(!is_visible_active_asr_provider("foundry-local-whisper"));
     }
@@ -199,12 +210,23 @@ mod cloud_first_tests {
             LOCAL_ASR_PROVIDER_ID,
             "local-qwen3",
             "foundry-local-whisper",
-            "whisper",
         ] {
             assert_eq!(
                 normalize_active_asr_provider_id(id),
                 QWEN_REALTIME_ASR_PROVIDER_ID
             );
         }
+    }
+
+    #[test]
+    fn advanced_compatible_asr_ids_are_preserved() {
+        assert_eq!(
+            normalize_active_asr_provider_id("silicon-flow"),
+            SILICONFLOW_ASR_PROVIDER_ID
+        );
+        assert_eq!(
+            normalize_active_asr_provider_id("openai-compatible-asr"),
+            OPENAI_COMPATIBLE_ASR_PROVIDER_ID
+        );
     }
 }

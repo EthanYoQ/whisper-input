@@ -2141,7 +2141,22 @@ fn ensure_asr_credentials() -> Result<(), String> {
         return Ok(());
     }
 
-    if is_whisper_compatible_provider(&active_asr) || is_bailian_provider(&active_asr) {
+    if is_whisper_compatible_provider(&active_asr) {
+        let (api_key, endpoint, _) = read_whisper_credentials();
+        let model = CredentialsVault::get(CredentialAccount::AsrModel)
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        if endpoint.trim().is_empty() || model.trim().is_empty() {
+            return Err("请先在设置中填写 ASR 服务商 Endpoint 和 Model".to_string());
+        }
+        if crate::asr::whisper::endpoint_requires_api_key(&endpoint) && api_key.trim().is_empty() {
+            return Err("请先在设置中填写 ASR 服务商 API Key".to_string());
+        }
+        return Ok(());
+    }
+
+    if is_bailian_provider(&active_asr) {
         let api_key = CredentialsVault::get(CredentialAccount::AsrApiKey)
             .ok()
             .flatten()
@@ -2263,13 +2278,19 @@ async fn build_local_qwen3(
     Ok(Arc::new(crate::asr::local::LocalQwenAsr::new(app, engine)))
 }
 
-/// `whisper` 是 OpenAI 原生；`siliconflow` / `zhipu` / `groq` 都暴露
+/// `whisper` 是通用兼容入口；`siliconflow` / `zhipu` / `groq` 都暴露
 /// OpenAI 兼容的 `/audio/transcriptions`，统一走 `WhisperBatchASR`。
 /// 新增 OpenAI 兼容 ASR 时只需在这里加一项。
 ///
 /// 注：DashScope Qwen realtime 用 WebSocket realtime 协议，走 `QwenRealtimeASR`。
 fn is_whisper_compatible_provider(id: &str) -> bool {
-    matches!(id, "whisper" | "siliconflow" | "zhipu" | "groq")
+    matches!(
+        id,
+        crate::product::OPENAI_COMPATIBLE_ASR_PROVIDER_ID
+            | crate::product::SILICONFLOW_ASR_PROVIDER_ID
+            | "zhipu"
+            | "groq"
+    )
 }
 
 fn is_qwen_realtime_provider(id: &str) -> bool {

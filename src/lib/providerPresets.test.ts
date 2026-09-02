@@ -1,10 +1,18 @@
-import { ASR_PROVIDER_PRESETS, LLM_MODEL_PRESETS } from './providerPresets';
+import {
+  ADVANCED_ASR_PROVIDER_IDS,
+  ASR_PROVIDER_PRESETS,
+  LLM_MODEL_PRESETS,
+  SILICONFLOW_ASR_DEFAULT_ENDPOINT,
+  SILICONFLOW_ASR_DEFAULT_MODEL,
+} from './providerPresets';
 import {
   DOUBAO_ASR_PROVIDER_ID,
   DOUBAO_LLM_PROVIDER_ID,
   GEMINI_PROVIDER_ID,
+  OPENAI_COMPATIBLE_ASR_PROVIDER_ID,
   QWEN_LLM_PROVIDER_ID,
   QWEN_REALTIME_ASR_PROVIDER_ID,
+  SILICONFLOW_ASR_PROVIDER_ID,
 } from './product';
 import { zhCN } from '../i18n/zh-CN';
 
@@ -52,6 +60,10 @@ const geminiApiKeyUrl = 'https://aistudio.google.com/apikey';
 
 assert(Boolean(qwenAsrPreset), 'qwen ASR preset should exist');
 assert(Boolean(doubaoAsrPreset), 'doubao ASR preset should exist');
+assertEqual(ADVANCED_ASR_PROVIDER_IDS.siliconflow, SILICONFLOW_ASR_PROVIDER_ID, 'SiliconFlow advanced ASR provider id');
+assertEqual(ADVANCED_ASR_PROVIDER_IDS.openAiCompatible, OPENAI_COMPATIBLE_ASR_PROVIDER_ID, 'compatible advanced ASR provider id');
+assertEqual(SILICONFLOW_ASR_DEFAULT_ENDPOINT, 'https://api.siliconflow.cn/v1', 'SiliconFlow ASR endpoint');
+assertEqual(SILICONFLOW_ASR_DEFAULT_MODEL, 'FunAudioLLM/SenseVoiceSmall', 'SiliconFlow ASR model');
 assert(Boolean(qwenLlmPreset), 'qwen LLM preset should exist');
 assert(
   qwenLlmPreset?.model === 'qwen3.5-flash',

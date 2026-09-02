@@ -435,7 +435,12 @@ fn asr_configured_for_provider(provider: &str, snap: &CredentialsSnapshot) -> bo
     if provider == crate::asr::bailian::PROVIDER_ID {
         return configured(&snap.asr_api_key);
     }
-    configured(&snap.asr_api_key) && configured(&snap.asr_endpoint) && configured(&snap.asr_model)
+    let endpoint = snap.asr_endpoint.as_deref().unwrap_or_default();
+    let endpoint_and_model = configured(&snap.asr_endpoint) && configured(&snap.asr_model);
+    if endpoint_and_model && crate::asr::whisper::endpoint_requires_api_key(endpoint) {
+        return configured(&snap.asr_api_key);
+    }
+    endpoint_and_model
 }
 
 fn llm_configured_for_provider(provider: &str, snap: &CredentialsSnapshot) -> bool {
@@ -460,13 +465,7 @@ fn llm_configured_for_provider(provider: &str, snap: &CredentialsSnapshot) -> bo
 }
 
 fn llm_endpoint_requires_key(endpoint: &str) -> bool {
-    let Ok(url) = reqwest::Url::parse(endpoint.trim()) else {
-        return true;
-    };
-    let Some(host) = url.host_str() else {
-        return true;
-    };
-    !(host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1")
+    crate::asr::whisper::endpoint_requires_api_key(endpoint)
 }
 
 fn configured(field: &Option<String>) -> bool {
@@ -824,9 +823,9 @@ fn gemini_llm_validation_config(
 }
 
 fn read_openai_provider_config(kind: &str) -> Result<ProviderConfig, String> {
-    let (endpoint_account, api_key_required) = match kind {
-        "llm" => (CredentialAccount::ArkEndpoint, false),
-        "asr" => (CredentialAccount::AsrEndpoint, true),
+    let endpoint_account = match kind {
+        "llm" => CredentialAccount::ArkEndpoint,
+        "asr" => CredentialAccount::AsrEndpoint,
         _ => return Err(format!("unknown provider kind: {kind}")),
     };
     let api_key = match kind {
@@ -874,9 +873,12 @@ fn read_openai_provider_config(kind: &str) -> Result<ProviderConfig, String> {
     if base_url.trim().is_empty() {
         return Err("Endpoint 为空".to_string());
     }
-    if (api_key_required || (kind == "llm" && llm_endpoint_requires_key(&base_url)))
-        && api_key.trim().is_empty()
-    {
+    let api_key_required = match kind {
+        "llm" => llm_endpoint_requires_key(&base_url),
+        "asr" => crate::asr::whisper::endpoint_requires_api_key(&base_url),
+        _ => unreachable!("kind is checked above"),
+    };
+    if api_key_required && api_key.trim().is_empty() {
         return Err("API Key 为空".to_string());
     }
     Ok(ProviderConfig {
@@ -1162,19 +1164,17 @@ async fn validate_asr_transcription(config: &ProviderConfig, model: &str) -> Res
     let client = http_client_builder(&url, 20)
         .build()
         .map_err(|_| "providerClientInitFailed".to_string())?;
-    let response = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {}", config.api_key))
-        .multipart(form)
-        .send()
-        .await
-        .map_err(|e| {
-            if e.is_timeout() {
-                "providerRequestTimeout".to_string()
-            } else {
-                "providerNetworkError".to_string()
-            }
-        })?;
+    let mut request = client.post(&url);
+    if !config.api_key.trim().is_empty() {
+        request = request.header("Authorization", format!("Bearer {}", config.api_key.trim()));
+    }
+    let response = request.multipart(form).send().await.map_err(|e| {
+        if e.is_timeout() {
+            "providerRequestTimeout".to_string()
+        } else {
+            "providerNetworkError".to_string()
+        }
+    })?;
     let status = response.status();
     if !status.is_success() {
         return Err(format!("providerHttpStatus:{}", status.as_u16()));
@@ -1202,27 +1202,7 @@ async fn validate_asr_transcription(config: &ProviderConfig, model: &str) -> Res
 }
 
 fn asr_transcriptions_url(base_url: &str) -> Result<String, String> {
-    let parsed = reqwest::Url::parse(base_url.trim()).map_err(|_| "endpointInvalid".to_string())?;
-    let host = parsed.host_str().unwrap_or_default();
-    let localhost = host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1";
-    if parsed.scheme() != "https" && !localhost {
-        return Err("endpointMustUseHttps".to_string());
-    }
-
-    // Work on the URL path only so we don't corrupt query parameters.
-    let mut url = parsed.clone();
-    let path = parsed.path().trim_end_matches('/');
-    let next_path = if path.ends_with("/audio/transcriptions") {
-        path.to_string()
-    } else if path.ends_with("/audio") {
-        format!("{path}/transcriptions")
-    } else if let Some(prefix) = path.strip_suffix("/chat/completions") {
-        format!("{prefix}/audio/transcriptions")
-    } else {
-        format!("{path}/audio/transcriptions")
-    };
-    url.set_path(&next_path);
-    Ok(url.to_string())
+    crate::asr::whisper::transcriptions_url(base_url)
 }
 
 fn encode_wav_16k_mono_silence(duration_ms: u32) -> Vec<u8> {
@@ -2718,7 +2698,8 @@ mod tests {
         normalize_diagnostic_limit, normalize_foundry_language_hint, parse_gemini_model_ids,
         parse_latest_beta_from_atom, parse_model_ids, persist_settings, qwen_llm_provider_config,
         qwen_llm_validation_config, release_foundry_runtime_if_inactive,
-        validate_foundry_model_alias, ModelListProtocol, ProviderConfig, SettingsWriter,
+        validate_asr_transcription, validate_foundry_model_alias, ModelListProtocol,
+        ProviderConfig, SettingsWriter,
     };
     use crate::persistence::CredentialsSnapshot;
     use crate::types::{
@@ -2869,6 +2850,20 @@ mod tests {
             ..snapshot()
         };
         assert!(asr_configured_for_provider("whisper", &whisper_ready));
+        assert!(asr_configured_for_provider(
+            crate::product::SILICONFLOW_ASR_PROVIDER_ID,
+            &whisper_ready
+        ));
+
+        let local_compatible_ready = CredentialsSnapshot {
+            asr_endpoint: Some("http://127.0.0.1:8000/v1".into()),
+            asr_model: Some("local-whisper".into()),
+            ..snapshot()
+        };
+        assert!(asr_configured_for_provider(
+            crate::product::OPENAI_COMPATIBLE_ASR_PROVIDER_ID,
+            &local_compatible_ready
+        ));
 
         assert!(!asr_configured_for_provider(
             crate::asr::local::PROVIDER_ID,
@@ -3884,6 +3879,53 @@ mod tests {
         .unwrap();
 
         assert_eq!(models, vec!["m1".to_string(), "m2".to_string()]);
+        server.join().unwrap();
+    }
+
+    #[tokio::test]
+    async fn validate_local_compatible_asr_omits_authorization() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 8192];
+            let mut request = Vec::new();
+            loop {
+                let n = stream.read(&mut buf).unwrap();
+                if n == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buf[..n]);
+                if request.windows(4).any(|w| w == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let request_text = String::from_utf8_lossy(&request);
+            assert!(request_text.starts_with("POST /v1/audio/transcriptions HTTP/1.1"));
+            assert!(!request_text
+                .to_ascii_lowercase()
+                .contains("authorization: bearer"));
+
+            let body = r#"{"text":"ok"}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+        });
+
+        validate_asr_transcription(
+            &ProviderConfig {
+                base_url: format!("http://{addr}/v1"),
+                api_key: String::new(),
+                model_list_protocol: ModelListProtocol::OpenAICompatible,
+            },
+            "local-whisper",
+        )
+        .await
+        .unwrap();
         server.join().unwrap();
     }
 

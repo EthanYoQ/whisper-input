@@ -79,6 +79,8 @@ import {
 import {
   ASR_PROVIDER_PRESETS,
   LLM_MODEL_PRESETS,
+  SILICONFLOW_ASR_DEFAULT_ENDPOINT,
+  SILICONFLOW_ASR_DEFAULT_MODEL,
   type AsrProviderPreset,
   type LlmModelPreset,
 } from '../lib/providerPresets';
@@ -93,9 +95,11 @@ import {
   DOUBAO_LLM_PROVIDER_ID,
   GEMINI_PROVIDER_ID,
   LOCAL_ASR_PROVIDER_ID,
+  OPENAI_COMPATIBLE_ASR_PROVIDER_ID,
   OPENAI_COMPATIBLE_PROVIDER_ID,
   QWEN_LLM_PROVIDER_ID,
   QWEN_REALTIME_ASR_PROVIDER_ID,
+  SILICONFLOW_ASR_PROVIDER_ID,
 } from '../lib/product';
 import { PRODUCT_FEATURES } from '../lib/productMode';
 
@@ -1493,8 +1497,39 @@ type ModelBundleId = 'qwen-priority' | 'doubao-backup';
 type AdvancedAsrProviderId =
   | AsrPresetId
   | typeof LOCAL_ASR_PROVIDER_ID
+  | typeof SILICONFLOW_ASR_PROVIDER_ID
+  | typeof OPENAI_COMPATIBLE_ASR_PROVIDER_ID
   | 'local-qwen3'
   | 'foundry-local-whisper';
+
+function advancedAsrCopy() {
+  const zh = i18n.language.toLowerCase().startsWith('zh');
+  return zh
+    ? {
+        title: '自定义 / 兼容 ASR',
+        desc: '选择 SiliconFlow 预设，或连接任意兼容 /audio/transcriptions 的服务。',
+        service: '服务',
+        chooseService: '选择服务',
+        siliconflow: 'SiliconFlow（自动填入）',
+        custom: '自定义 / 本地兼容',
+        apiKey: 'API Key（本地服务可留空）',
+        endpoint: 'Endpoint',
+        model: '模型',
+        endpointHint: '可填写服务根路径或完整 /audio/transcriptions 路径；非本机地址必须使用 HTTPS 并填写 API Key。',
+      }
+    : {
+        title: 'Custom / compatible ASR',
+        desc: 'Choose the SiliconFlow preset or connect any /audio/transcriptions-compatible service.',
+        service: 'Service',
+        chooseService: 'Choose a service',
+        siliconflow: 'SiliconFlow (auto-fill)',
+        custom: 'Custom / local compatible',
+        apiKey: 'API key (optional for local services)',
+        endpoint: 'Endpoint',
+        model: 'Model',
+        endpointHint: 'Use either a service base URL or the full /audio/transcriptions URL. Non-local endpoints require HTTPS and an API key.',
+      };
+}
 
 function llmPresetKey(preset: LlmModelPreset): LlmPresetKey {
   return `${preset.providerId}:${preset.model}`;
@@ -1742,6 +1777,12 @@ function ModelsSection() {
     const asrId = normalizeVisibleAsrProvider(prefs.activeAsrProvider);
     setAsrProvider(asrId);
     setCommittedAsrProvider(asrId);
+    if (
+      prefs.activeAsrProvider === SILICONFLOW_ASR_PROVIDER_ID
+      || prefs.activeAsrProvider === OPENAI_COMPATIBLE_ASR_PROVIDER_ID
+    ) {
+      setModelMode('advanced');
+    }
     return () => {
       cancelled = true;
     };
@@ -2135,6 +2176,8 @@ function AdvancedSection({ llmSwitching, beginLlmSwitch, isCurrentLlmSwitch, end
   const [busy, setBusy] = useState(false);
   const [pendingTarget, setPendingTarget] = useState<AdvancedAsrProviderId | null>(null);
   const [advancedLlmModelRevision, setAdvancedLlmModelRevision] = useState(0);
+  const [advancedAsrModelRevision, setAdvancedAsrModelRevision] = useState(0);
+  const asrCopy = advancedAsrCopy();
 
   const activeAsrProvider = (prefs?.activeAsrProvider ?? DEFAULT_ASR_PROVIDER_ID) as AdvancedAsrProviderId;
   const activeLlmProvider = prefs?.activeLlmProvider ?? DEFAULT_LLM_PROVIDER_ID;
@@ -2146,6 +2189,9 @@ function AdvancedSection({ llmSwitching, beginLlmSwitch, isCurrentLlmSwitch, end
   const isOnLocalQwen3 = activeAsrProvider === 'local-qwen3';
   const isOnFoundry = activeAsrProvider === 'foundry-local-whisper';
   const isOnAnyLocal = isOnLocalQwen3 || isOnFoundry;
+  const isSiliconFlowAsr = activeAsrProvider === SILICONFLOW_ASR_PROVIDER_ID;
+  const isOpenAiCompatibleAsr = activeAsrProvider === OPENAI_COMPATIBLE_ASR_PROVIDER_ID;
+  const advancedAsrFieldsVisible = isSiliconFlowAsr || isOpenAiCompatibleAsr;
 
   const requestEnable = (target: AdvancedAsrProviderId) => {
     setPendingTarget(target);
@@ -2204,6 +2250,51 @@ function AdvancedSection({ llmSwitching, beginLlmSwitch, isCurrentLlmSwitch, end
       emitSaved('failed', t('common.operationFailed'));
     } finally {
       endLlmSwitch(seq);
+    }
+  };
+
+  const activateAdvancedAsr = async (
+    target: typeof SILICONFLOW_ASR_PROVIDER_ID | typeof OPENAI_COMPATIBLE_ASR_PROVIDER_ID,
+  ) => {
+    if (!prefs || busy) return;
+    const defaults = target === SILICONFLOW_ASR_PROVIDER_ID
+      ? { endpoint: SILICONFLOW_ASR_DEFAULT_ENDPOINT, model: SILICONFLOW_ASR_DEFAULT_MODEL }
+      : { endpoint: 'http://127.0.0.1:8000/v1', model: 'whisper-1' };
+    setBusy(true);
+    const seq = ++switchSeqRef.current;
+    const previous = activeAsrProvider;
+    let switched = false;
+    try {
+      await setActiveAsrProvider(target);
+      switched = true;
+      if (seq !== switchSeqRef.current) return;
+      try {
+        await updatePrefs({ ...prefs, activeAsrProvider: target });
+      } catch (error) {
+        await setActiveAsrProvider(previous);
+        throw error;
+      }
+      if (target !== previous) {
+        await Promise.all([
+          setCredential('asr.endpoint', defaults.endpoint),
+          setCredential('asr.model', defaults.model),
+        ]);
+      }
+      setAdvancedAsrModelRevision(value => value + 1);
+      emitSaved('saved', t('common.saved'));
+    } catch (error) {
+      if (switched && seq === switchSeqRef.current) {
+        try {
+          await setActiveAsrProvider(previous);
+          await updatePrefs({ ...prefs, activeAsrProvider: previous });
+        } catch (rollbackError) {
+          console.error('[settings] failed to rollback advanced ASR provider switch', rollbackError);
+        }
+      }
+      console.error('[settings] failed to activate advanced ASR provider', error);
+      emitSaved('failed', t('common.operationFailed'));
+    } finally {
+      if (seq === switchSeqRef.current) setBusy(false);
     }
   };
 
@@ -2334,6 +2425,66 @@ function AdvancedSection({ llmSwitching, beginLlmSwitch, isCurrentLlmSwitch, end
             />
           </div>
         )}
+      </Collapsible>
+
+      <Collapsible
+        key={advancedAsrFieldsVisible ? `advanced-asr-${activeAsrProvider}` : 'advanced-asr-inactive'}
+        title={asrCopy.title}
+        desc={asrCopy.desc}
+        defaultOpen={advancedAsrFieldsVisible}
+      >
+        <div style={{ display: 'grid', gap: 10 }}>
+          <SettingRow label={asrCopy.service}>
+            <select
+              value={advancedAsrFieldsVisible ? activeAsrProvider : ''}
+              onChange={event => void activateAdvancedAsr(event.target.value as typeof SILICONFLOW_ASR_PROVIDER_ID | typeof OPENAI_COMPATIBLE_ASR_PROVIDER_ID)}
+              disabled={!prefs || busy}
+              style={{ ...inputStyle, maxWidth: 'none' }}
+              aria-label={asrCopy.service}
+            >
+              {!advancedAsrFieldsVisible && <option value="" disabled>{asrCopy.chooseService}</option>}
+              <option value={SILICONFLOW_ASR_PROVIDER_ID}>{asrCopy.siliconflow}</option>
+              <option value={OPENAI_COMPATIBLE_ASR_PROVIDER_ID}>{asrCopy.custom}</option>
+            </select>
+          </SettingRow>
+
+          {advancedAsrFieldsVisible && (
+            <>
+              <CredentialField
+                key={`advanced-asr:${activeAsrProvider}:api-key`}
+                label={asrCopy.apiKey}
+                account="asr.api_key"
+                mono
+                mask
+                disabled={busy}
+              />
+              <CredentialField
+                key={`advanced-asr:${activeAsrProvider}:endpoint`}
+                label={asrCopy.endpoint}
+                account="asr.endpoint"
+                placeholder={isSiliconFlowAsr ? SILICONFLOW_ASR_DEFAULT_ENDPOINT : 'http://127.0.0.1:8000/v1'}
+                disabled={busy}
+              />
+              <CredentialField
+                key={`advanced-asr:${activeAsrProvider}:model:${advancedAsrModelRevision}`}
+                label={asrCopy.model}
+                account="asr.model"
+                placeholder={isSiliconFlowAsr ? SILICONFLOW_ASR_DEFAULT_MODEL : 'whisper-1'}
+                mono
+                disabled={busy}
+              />
+              <ProviderTools
+                kind="asr"
+                modelAccount="asr.model"
+                onModelSelected={() => setAdvancedAsrModelRevision(value => value + 1)}
+                disabled={busy}
+              />
+              <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', lineHeight: 1.55 }}>
+                {asrCopy.endpointHint}
+              </div>
+            </>
+          )}
+        </div>
       </Collapsible>
 
       {/* Deprecated non-product local ASR experiment. Standard product mode keeps this gate false. */}

@@ -63,6 +63,32 @@ assertEqual(
 
 assertEqual(
   areProvidersConfigured({
+    activeAsrProvider: 'siliconflow',
+    activeLlmProvider: 'qwen-llm',
+    asrConfigured: true,
+    llmConfigured: true,
+    volcengineConfigured: false,
+    arkConfigured: false,
+  }),
+  true,
+  'configured when SiliconFlow ASR and Qwen LLM are ready',
+);
+
+assertEqual(
+  areProvidersConfigured({
+    activeAsrProvider: 'whisper',
+    activeLlmProvider: 'qwen-llm',
+    asrConfigured: true,
+    llmConfigured: true,
+    volcengineConfigured: false,
+    arkConfigured: false,
+  }),
+  true,
+  'configured when a local compatible ASR service and Qwen LLM are ready',
+);
+
+assertEqual(
+  areProvidersConfigured({
     activeAsrProvider: 'qingyu-local-fired-asr',
     activeLlmProvider: 'openai-compatible',
     asrConfigured: true,

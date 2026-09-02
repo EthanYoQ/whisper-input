@@ -18,6 +18,50 @@ pub const PROMPT_CHAR_BUDGET: usize = 240;
 /// 区切り文字（ASCII）。Whisper のトークナイザはどの言語でも安定して扱える。
 const PROMPT_SEPARATOR: &str = ", ";
 
+/// Normalize a user-supplied OpenAI-compatible ASR endpoint to the
+/// transcription resource. Both a service base URL and the exact
+/// `/audio/transcriptions` URL are accepted so copied provider examples work
+/// without producing a duplicated path.
+pub fn transcriptions_url(base_url: &str) -> Result<String, String> {
+    let parsed = reqwest::Url::parse(base_url.trim()).map_err(|_| "endpointInvalid".to_string())?;
+    let host = parsed.host_str().unwrap_or_default();
+    if parsed.scheme() != "https" && !is_loopback_host(host) {
+        return Err("endpointMustUseHttps".to_string());
+    }
+
+    // Work on the URL path only so query parameters stay intact.
+    let mut url = parsed.clone();
+    let path = parsed.path().trim_end_matches('/');
+    let next_path = if path.ends_with("/audio/transcriptions") {
+        path.to_string()
+    } else if path.ends_with("/audio") {
+        format!("{path}/transcriptions")
+    } else if let Some(prefix) = path.strip_suffix("/chat/completions") {
+        format!("{prefix}/audio/transcriptions")
+    } else {
+        format!("{path}/audio/transcriptions")
+    };
+    url.set_path(&next_path);
+    Ok(url.to_string())
+}
+
+/// Local OpenAI-compatible ASR servers commonly have no authentication. A
+/// remote endpoint remains key-protected by default, including malformed URLs
+/// so validation fails closed instead of treating an unknown host as local.
+pub fn endpoint_requires_api_key(base_url: &str) -> bool {
+    let Ok(url) = reqwest::Url::parse(base_url.trim()) else {
+        return true;
+    };
+    !is_loopback_host(url.host_str().unwrap_or_default())
+}
+
+fn is_loopback_host(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost")
+        || host == "127.0.0.1"
+        || host == "::1"
+        || host == "[::1]"
+}
+
 pub struct WhisperBatchASR {
     api_key: String,
     base_url: String,
@@ -68,7 +112,7 @@ impl WhisperBatchASR {
         // 16 kHz mono 16-bit: 2 bytes per sample.
         let duration_ms = (pcm.len() as u64 / 2) * 1000 / 16_000;
 
-        if self.api_key.is_empty() {
+        if endpoint_requires_api_key(&self.base_url) && self.api_key.trim().is_empty() {
             anyhow::bail!("Whisper API key missing");
         }
 
@@ -77,8 +121,7 @@ impl WhisperBatchASR {
             .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
             .collect();
         let wav = encode_wav_16k_mono(&samples);
-        let base_url = self.base_url.trim_end_matches('/');
-        let url = format!("{}/audio/transcriptions", base_url);
+        let url = transcriptions_url(&self.base_url).map_err(anyhow::Error::msg)?;
 
         let wav_part = reqwest::multipart::Part::bytes(wav)
             .file_name("audio.wav")
@@ -99,9 +142,11 @@ impl WhisperBatchASR {
         }
 
         let client = reqwest::Client::new();
-        let resp = client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
+        let mut request = client.post(&url);
+        if !self.api_key.trim().is_empty() {
+            request = request.header("Authorization", format!("Bearer {}", self.api_key.trim()));
+        }
+        let resp = request
             .multipart(form)
             .send()
             .await
@@ -185,6 +230,31 @@ pub fn build_prompt_from_phrases(phrases: &[String]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transcriptions_url_accepts_a_base_or_exact_endpoint() {
+        assert_eq!(
+            transcriptions_url("https://api.siliconflow.cn/v1").unwrap(),
+            "https://api.siliconflow.cn/v1/audio/transcriptions"
+        );
+        assert_eq!(
+            transcriptions_url("https://api.siliconflow.cn/v1/audio/transcriptions").unwrap(),
+            "https://api.siliconflow.cn/v1/audio/transcriptions"
+        );
+        assert_eq!(
+            transcriptions_url("http://127.0.0.1:8000/v1?profile=local").unwrap(),
+            "http://127.0.0.1:8000/v1/audio/transcriptions?profile=local"
+        );
+    }
+
+    #[test]
+    fn only_loopback_endpoints_can_omit_an_api_key() {
+        assert!(!endpoint_requires_api_key("http://localhost:8000/v1"));
+        assert!(!endpoint_requires_api_key("http://127.0.0.1:8000/v1"));
+        assert!(!endpoint_requires_api_key("http://[::1]:8000/v1"));
+        assert!(endpoint_requires_api_key("https://api.siliconflow.cn/v1"));
+        assert!(endpoint_requires_api_key("not a url"));
+    }
 
     #[test]
     fn build_prompt_returns_none_for_empty_input() {

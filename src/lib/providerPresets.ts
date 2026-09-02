@@ -2,9 +2,11 @@ import {
   DOUBAO_ASR_PROVIDER_ID,
   DOUBAO_LLM_PROVIDER_ID,
   GEMINI_PROVIDER_ID,
+  OPENAI_COMPATIBLE_ASR_PROVIDER_ID,
   OPENAI_COMPATIBLE_PROVIDER_ID,
   QWEN_LLM_PROVIDER_ID,
   QWEN_REALTIME_ASR_PROVIDER_ID,
+  SILICONFLOW_ASR_PROVIDER_ID,
 } from './product';
 
 export type CloudCredentialAccount =
@@ -100,3 +102,13 @@ export const LLM_MODEL_PRESETS = [
 ] as const satisfies ReadonlyArray<LlmModelPreset>;
 
 export const ADVANCED_LLM_PROVIDER_ID = OPENAI_COMPATIBLE_PROVIDER_ID;
+
+// The compatibility path deliberately accepts either this base URL or a full
+// `/audio/transcriptions` URL. Keep these defaults next to provider presets so
+// Settings and its focused tests cannot drift apart.
+export const SILICONFLOW_ASR_DEFAULT_ENDPOINT = 'https://api.siliconflow.cn/v1';
+export const SILICONFLOW_ASR_DEFAULT_MODEL = 'FunAudioLLM/SenseVoiceSmall';
+export const ADVANCED_ASR_PROVIDER_IDS = {
+  siliconflow: SILICONFLOW_ASR_PROVIDER_ID,
+  openAiCompatible: OPENAI_COMPATIBLE_ASR_PROVIDER_ID,
+} as const;
