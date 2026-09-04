@@ -145,3 +145,16 @@ y=64、h=728 完全同高,四角弧线完整(Arc 现行双浮板形态)。侧栏
 **验证**:预览实测(两浮板同高 728、Tab/按钮同带 38px@y95、段选激活态
 bg=蓝纱+白纱、字色 rgb(15,111,255),深浅双色)+ v11 四图 + 15/15 测试 +
 tsc + build 全绿。
+
+### 2026-09-04 合并后玻璃审查修复
+
+- QA 与划词润色浮窗改用成对的 `--lg-float-*` 主题 token，清除未定义的
+  `--ol-ink-1`、`--ol-surface-1`、`--ol-danger`。
+- Windows 主窗口优先 Mica，Windows 10 才回退 Acrylic；只有原生调用成功时
+  才标记 `data-native-glass=on`，否则主窗口使用实体底色。删除 Windows 8 起
+  不再产生模糊的胶囊 `DwmEnableBlurBehindWindow` 路径。
+- 透明度通过 `ui:glass-alpha-changed` Tauri event 同步四个 webview；预览控件与
+  普通 `--ol-surface-2` 控件均由 45% 降为 18%，激活层由 78% 降为 20%，
+  导航激活层由 68% 降为 18%。
+- 新增减少透明度、高对比度降级；直接依赖对齐 Tauri 的
+  `window-vibrancy 0.6`，避免 macOS 同时链接 0.6/0.7；补齐 Inter OFL 1.1。

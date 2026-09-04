@@ -107,7 +107,7 @@ winreg = "0.52"
 
 # 跨平台磨砂层（macOS NSVisualEffectView / Windows Mica）。
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
-window-vibrancy = "0.7"
+window-vibrancy = "0.6"
 
 [features]
 default = ["custom-protocol"]

@@ -117,11 +117,13 @@ export function SelectionPolishPanel() {
 }
 
 const shellStyle: React.CSSProperties = {
-  minHeight: '100vh',
-  background: 'rgba(250, 250, 249, 0.96)',
-  border: '0.5px solid var(--ol-line)',
+  width: '100%',
+  height: '100vh',
+  background: 'linear-gradient(180deg, var(--lg-float-top), var(--lg-float-bottom))',
+  border: '0.5px solid var(--lg-float-border)',
   borderRadius: 12,
-  color: 'var(--ol-ink-1)',
+  color: 'var(--ol-ink)',
+  boxShadow: 'var(--lg-float-shadow)',
   fontFamily: 'var(--ol-font-sans)',
   overflow: 'hidden',
 };
@@ -156,12 +158,12 @@ const textareaStyle: React.CSSProperties = {
   padding: 12,
   borderRadius: 8,
   border: '0.5px solid var(--ol-line-strong)',
-  background: 'var(--ol-surface-1)',
-  color: 'var(--ol-ink-1)',
+  background: 'var(--ol-surface-2)',
+  color: 'var(--ol-ink)',
   font: 'inherit',
   lineHeight: 1.6,
 };
 
 const metaStyle: React.CSSProperties = { fontSize: 12, color: 'var(--ol-ink-4)' };
 const stateStyle: React.CSSProperties = { minHeight: 210, display: 'grid', placeItems: 'center', color: 'var(--ol-ink-3)' };
-const errorStyle: React.CSSProperties = { fontSize: 12, color: 'var(--ol-danger)' };
+const errorStyle: React.CSSProperties = { fontSize: 12, color: 'var(--ol-err)' };
