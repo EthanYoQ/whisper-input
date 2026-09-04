@@ -1,9 +1,10 @@
 // 玻璃面板不透明度偏好：只缩放 glass.css 中「填充类」token 的 alpha
 // （tint / sidebar / sheet / nav / pill 填充 / float / pop-surface）,
 // rim 高光、描边、墨色不动 —— 调低时玻璃更通透,但边缘与文字对比不变。
-// 持久化与主题同模式:localStorage,主窗口内即时生效。
+// 持久化与主题同模式:localStorage；Tauri event 负责同步所有已加载窗口。
 
 export const GLASS_ALPHA_STORAGE_KEY = 'ol.glass-alpha';
+export const GLASS_ALPHA_EVENT = 'ui:glass-alpha-changed';
 export const GLASS_ALPHA_MIN = 0.6;
 export const GLASS_ALPHA_MAX = 1;
 export const GLASS_ALPHA_DEFAULT = 1;
@@ -46,4 +47,25 @@ export function setGlassAlpha(alpha: number): void {
   } catch {
     // Ignore restricted or quota-limited storage.
   }
+  void broadcastGlassAlpha(clamped).catch(error => {
+    console.warn('[glass-alpha] cross-window broadcast failed', error);
+  });
+}
+
+function hasTauriRuntime(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+export async function broadcastGlassAlpha(alpha: number): Promise<void> {
+  if (!hasTauriRuntime()) return;
+  const { emit } = await import('@tauri-apps/api/event');
+  await emit(GLASS_ALPHA_EVENT, clampGlassAlpha(alpha));
+}
+
+export async function startGlassAlphaSync(): Promise<() => void> {
+  if (!hasTauriRuntime()) return () => undefined;
+  const { listen } = await import('@tauri-apps/api/event');
+  return listen<number>(GLASS_ALPHA_EVENT, event => {
+    applyGlassAlpha(event.payload);
+  });
 }

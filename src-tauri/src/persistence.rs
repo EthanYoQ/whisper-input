@@ -90,15 +90,35 @@ fn store_credentials_cache(root: &CredsRoot) {
     *credentials_cache().lock() = Some(sanitize_credentials(root));
 }
 
-#[cfg(test)]
-fn reset_credentials_cache_for_tests() {
-    *credentials_cache().lock() = None;
-}
-
 // ───────────────────────── path helpers ─────────────────────────
 
+#[cfg(test)]
+fn test_run_root() -> PathBuf {
+    static ROOT: OnceLock<PathBuf> = OnceLock::new();
+    ROOT.get_or_init(|| {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.runtime/.cache")
+            .join(format!("rust-tests-{}-{}", std::process::id(), Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create isolated test data");
+        let owner = serde_json::json!({"owner":"rust-unit-tests", "sourceProject":"Whisper-input", "createdAt":Utc::now().to_rfc3339(), "ttlDays":1, "reason":"isolated synthetic test data", "cleanupCommand":format!("Remove-Item -LiteralPath '{}' -Recurse -Force", root.display())});
+        fs::write(root.join(".vibe-owner.json"), owner.to_string()).expect("write test ownership");
+        root
+    }).clone()
+}
+
+#[cfg(test)]
+fn test_data_root() -> PathBuf {
+    // Each test thread owns its stores. Code crossing threads carries the store,
+    // not a global environment-variable override affecting concurrent tests.
+    thread_local! { static ROOT: PathBuf = test_run_root().join(Uuid::new_v4().to_string()); }
+    ROOT.with(Clone::clone)
+}
+
 pub(crate) fn data_dir() -> Result<PathBuf> {
-    #[cfg(target_os = "macos")]
+    #[cfg(test)]
+    {
+        return Ok(test_data_root().join("current"));
+    }
+    #[cfg(all(not(test), target_os = "macos"))]
     {
         let home = std::env::var("HOME").context("HOME not set")?;
         Ok(PathBuf::from(home)
@@ -107,13 +127,13 @@ pub(crate) fn data_dir() -> Result<PathBuf> {
             .join(crate::product::DATA_DIR_NAME))
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(not(test), target_os = "windows"))]
     {
         let appdata = std::env::var("APPDATA").context("APPDATA not set")?;
         Ok(PathBuf::from(appdata).join(crate::product::DATA_DIR_NAME))
     }
 
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(all(not(test), unix, not(target_os = "macos")))]
     {
         if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
             if !xdg.is_empty() {
@@ -133,12 +153,16 @@ pub fn app_data_dir() -> Result<PathBuf> {
 }
 
 fn legacy_data_dir() -> Result<PathBuf> {
-    #[cfg(target_os = "windows")]
+    #[cfg(test)]
+    {
+        return Ok(test_data_root().join("legacy"));
+    }
+    #[cfg(all(not(test), target_os = "windows"))]
     {
         let appdata = std::env::var("APPDATA").context("APPDATA not set")?;
         return Ok(PathBuf::from(appdata).join(crate::product::LEGACY_DATA_DIR_NAME));
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(all(not(test), target_os = "macos"))]
     {
         let home = std::env::var("HOME").context("HOME not set")?;
         return Ok(PathBuf::from(home)
@@ -146,7 +170,7 @@ fn legacy_data_dir() -> Result<PathBuf> {
             .join("Application Support")
             .join(crate::product::LEGACY_DATA_DIR_NAME));
     }
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(all(not(test), unix, not(target_os = "macos")))]
     {
         if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
             if !xdg.is_empty() {
@@ -402,16 +426,20 @@ impl CredsLlmEntry {
 }
 
 fn credentials_path() -> Result<PathBuf> {
+    #[cfg(test)]
+    {
+        return Ok(test_data_root().join("legacy-credentials.json"));
+    }
     // macOS / Linux: ~/.openless/credentials.json (与 Swift 同源)
     // Windows: %APPDATA%\OpenLess\credentials.json (Windows 没有标准 HOME 环境变量)
-    #[cfg(target_os = "windows")]
+    #[cfg(all(not(test), target_os = "windows"))]
     {
         let appdata = std::env::var("APPDATA").context("APPDATA not set")?;
         return Ok(PathBuf::from(appdata)
             .join("OpenLess")
             .join(LEGACY_CREDS_FILE));
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(all(not(test), not(target_os = "windows")))]
     {
         let home = std::env::var("HOME").context("HOME not set")?;
         Ok(PathBuf::from(home)
@@ -420,15 +448,44 @@ fn credentials_path() -> Result<PathBuf> {
     }
 }
 
-fn keyring_entry() -> Result<keyring::Entry> {
+#[cfg(test)]
+type VaultEntry = std::sync::Arc<keyring::Entry>;
+#[cfg(not(test))]
+type VaultEntry = keyring::Entry;
+
+fn keyring_entry() -> Result<VaultEntry> {
     keyring_entry_for(KEYRING_CREDENTIALS_ACCOUNT)
 }
 
-fn keyring_entry_for(account: &str) -> Result<keyring::Entry> {
+fn keyring_entry_for(account: &str) -> Result<VaultEntry> {
     keyring_entry_for_service(CredentialsVault::SERVICE_NAME, account)
 }
 
-fn keyring_entry_for_service(service: &str, account: &str) -> Result<keyring::Entry> {
+fn keyring_entry_for_service(service: &str, account: &str) -> Result<VaultEntry> {
+    #[cfg(test)]
+    {
+        static MOCK: std::sync::Once = std::sync::Once::new();
+        MOCK.call_once(|| {
+            keyring::set_default_credential_builder(keyring::mock::default_credential_builder())
+        });
+        // keyring's mock persists per Entry, so reuse entries by service/account
+        // to exercise real manifest/chunk read-after-write and deletion semantics.
+        static ENTRIES: OnceLock<Mutex<std::collections::HashMap<(String, String), VaultEntry>>> =
+            OnceLock::new();
+        let mut entries = ENTRIES
+            .get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+            .lock();
+        let key = (service.to_owned(), account.to_owned());
+        if let Some(entry) = entries.get(&key) {
+            return Ok(entry.clone());
+        }
+        let entry = std::sync::Arc::new(
+            keyring::Entry::new(service, account).context("open mock credential vault")?,
+        );
+        entries.insert(key, entry.clone());
+        return Ok(entry);
+    }
+    #[cfg(not(test))]
     keyring::Entry::new(service, account).context("open system credential vault")
 }
 
@@ -1795,6 +1852,33 @@ impl CredentialsVault {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn mock_vault_persists_across_entries_and_deletes() {
+        let service = format!("isolated-{}", uuid::Uuid::new_v4());
+        let first = super::keyring_entry_for_service(&service, "chunk").unwrap();
+        first.set_password("synthetic-chunk").unwrap();
+        let second = super::keyring_entry_for_service(&service, "chunk").unwrap();
+        assert_eq!(second.get_password().unwrap(), "synthetic-chunk");
+        second.delete_credential().unwrap();
+        assert!(first.get_password().is_err());
+        assert!(super::keyring_entry_for_service(&service, "other")
+            .unwrap()
+            .get_password()
+            .is_err());
+    }
+
+    #[test]
+    fn test_storage_never_resolves_to_user_directories() {
+        let root = super::test_run_root();
+        assert!(super::data_dir().unwrap().starts_with(&root));
+        assert!(super::legacy_data_dir().unwrap().starts_with(&root));
+        assert!(super::credentials_path().unwrap().starts_with(&root));
+        let current = super::data_dir().unwrap();
+        let other = std::thread::spawn(|| super::data_dir().unwrap())
+            .join()
+            .unwrap();
+        assert_ne!(current, other);
+    }
     use super::{
         chunk_json_payload, clean_credentials, list_vocab_presets, normalize_active_llm_provider,
         save_vocab_presets, validate_correction_rule_syntax, write_account, CredentialAccount,
@@ -1809,7 +1893,6 @@ mod tests {
 
     #[test]
     fn credentials_root_defaults_to_cloud_first_active_providers() {
-        super::reset_credentials_cache_for_tests();
         let root = CredsRoot::default();
         assert_eq!(
             root.active.asr,
@@ -1820,7 +1903,6 @@ mod tests {
 
     #[test]
     fn credential_sanitize_maps_volcengine_active_to_doubao_backup() {
-        super::reset_credentials_cache_for_tests();
         let mut root = CredsRoot::default();
         root.active.asr = "volcengine".into();
 
@@ -2354,13 +2436,6 @@ mod tests {
 
     #[test]
     fn vocab_presets_roundtrip_json_file() {
-        let tmp: PathBuf =
-            std::env::temp_dir().join(format!("openless-test-{}", uuid::Uuid::new_v4()));
-        fs::create_dir_all(&tmp).expect("create temp dir");
-        // Linux path helper uses XDG_DATA_HOME first.
-        unsafe {
-            std::env::set_var("XDG_DATA_HOME", &tmp);
-        }
         let store = VocabPresetStore {
             custom: vec![VocabPreset {
                 id: "test".into(),
@@ -2379,7 +2454,6 @@ mod tests {
             vec!["PR".to_string(), "CI".to_string()]
         );
         assert_eq!(loaded.disabled_builtin_preset_ids, vec!["chef".to_string()]);
-        let _ = fs::remove_dir_all(&tmp);
     }
 
     #[test]

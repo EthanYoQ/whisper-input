@@ -17,6 +17,7 @@ import i18n, { setLocalePreference } from '../i18n';
 import { APP_TABS } from '../lib/appNavigation';
 import { PRODUCT_NAME, PRODUCT_NAME_ZH } from '../lib/product';
 import { PROVIDER_SETUP_PROMPT_DEFERRED_KEY, shouldShowProviderSetupPrompt } from '../lib/providerSetup';
+import { readThemePreference, setThemePreference, subscribeThemePreference, type ThemePreference } from '../lib/themePreference';
 import { type SettingsSectionId } from '../pages/Settings';
 import { useAppState, type AppTab } from '../state/useAppState';
 
@@ -81,6 +82,8 @@ function FloatingShellBody({
   const { currentTab, setCurrentTab } = useAppState(initialSettings ? 'settings' : initialTab);
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSectionId | undefined>(initialSettingsSection);
   const [startupPrompt, setStartupPrompt] = useState<'provider' | 'hotkey' | null>(null);
+  const [theme, setTheme] = useState<ThemePreference>(() => readThemePreference());
+  useEffect(() => subscribeThemePreference(setTheme), []);
 
   const [displayTab, setDisplayTab] = useState<AppTab>(currentTab);
   const [tabPhase, setTabPhase] = useState<'idle' | 'exiting'>('idle');
@@ -180,6 +183,14 @@ function FloatingShellBody({
     const currentLanguage = (i18n.resolvedLanguage || i18n.language || '').toLowerCase();
     void setLocalePreference(currentLanguage.startsWith('en') ? 'zh-CN' : 'en');
   };
+  const switchTheme = () => {
+    const nextTheme: ThemePreference = theme === 'dark' ? 'light' : 'dark';
+    setThemePreference(nextTheme);
+    setTheme(nextTheme);
+  };
+
+  const commandBar = <CommandBar onOpenHelp={openHelp} onToggleTheme={switchTheme}
+    onToggleLocale={switchLocale} theme={theme} />;
 
   return (
     <>
@@ -188,12 +199,7 @@ function FloatingShellBody({
         sidebar={
           <Sidebar items={sidebarItems} />
         }
-        commandBar={
-          <CommandBar
-            onOpenHelp={openHelp}
-            onToggleLocale={switchLocale}
-          />
-        }
+        commandBar={displayTab === 'settings' ? undefined : commandBar}
         overlays={
           startupPrompt === 'provider' ? (
             <ProviderSetupPrompt onLater={deferStartupPrompt} onOpenSettings={openStartupPromptSettings} />
@@ -206,7 +212,7 @@ function FloatingShellBody({
           {displayTab === 'overview' ? (
             <Overview onOpenHistory={() => setCurrentTab('history')} onOpenSettings={() => openSettingsPage('models')} />
           ) : displayTab === 'settings' ? (
-            <Settings embedded initialSection={settingsInitialSection ?? 'models'} />
+            <Settings embedded initialSection={settingsInitialSection ?? 'models'} headerTools={commandBar} />
           ) : (
             <Page />
           )}
@@ -249,17 +255,31 @@ function FloatingShellBody({
 
 function CommandBar({
   onOpenHelp,
+  onToggleTheme,
   onToggleLocale,
+  theme,
 }: {
   onOpenHelp: () => void;
+  onToggleTheme: () => void;
   onToggleLocale: () => void;
+  theme: ThemePreference;
 }) {
   const { t } = useTranslation();
+  const themeLabel = t(theme === 'dark' ? 'shell.commandBar.themeLight' : 'shell.commandBar.themeDark');
   return (
     <div className="wi-commandbar">
       <button className="wi-btn" type="button" onClick={onOpenHelp}>
         <Icon name="help" size={14} strokeWidth={1.75} />
         {t('shell.commandBar.help')}
+      </button>
+      <button
+        className="wi-btn wi-icon-btn"
+        type="button"
+        title={themeLabel}
+        aria-label={themeLabel}
+        onClick={onToggleTheme}
+      >
+        <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={16} strokeWidth={1.75} />
       </button>
       <button
         className="wi-btn"

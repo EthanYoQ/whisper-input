@@ -3148,7 +3148,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "thiserror 2.0.18",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6287,7 +6287,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "thiserror 2.0.18",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6840,7 +6840,7 @@ checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 
 [[package]]
 name = "whisper-input"
-version = "1.5.2"
+version = "1.5.3"
 dependencies = [
  "anyhow",
  "arboard",
@@ -6887,6 +6887,7 @@ dependencies = [
  "tokio-tungstenite",
  "url",
  "uuid",
+ "window-vibrancy 0.6.0",
  "window-vibrancy 0.7.1",
  "windows 0.58.0",
  "winreg 0.52.0",

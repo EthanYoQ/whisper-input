@@ -604,13 +604,13 @@ const shellStyle: CSSProperties = {
   flexDirection: 'column',
   borderRadius: 12,
   overflow: 'hidden',
-  // 浮窗 focus:false 在 macOS 上会让 backdrop-filter 不工作（透到桌面文字），所以
-  // 改成接近不透明的实色背景。blur 仅作锦上添花，不再依赖它保证可读性。
-  background: 'rgba(255, 255, 255, 0.97)',
+  // 独立 webview 不依赖 DOM backdrop-filter 保证可读性；双主题浮窗 token
+  // 自带较实 tint，并随全局透明度设置同步。
+  background: 'linear-gradient(180deg, var(--lg-float-top), var(--lg-float-bottom))',
   backdropFilter: 'blur(24px) saturate(180%)',
   WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-  border: '0.5px solid rgba(0, 0, 0, 0.08)',
-  boxShadow: 'var(--ol-shadow-lg)',
+  border: '0.5px solid var(--lg-float-border)',
+  boxShadow: 'var(--lg-float-shadow)',
   fontFamily: 'var(--ol-font-sans)',
   color: 'var(--ol-ink)',
 };

@@ -4812,28 +4812,16 @@ fn show_capsule_window_no_activate<R: tauri::Runtime>(
     _app: &AppHandle<R>,
     window: &tauri::WebviewWindow<R>,
 ) -> bool {
-    use windows::Win32::UI::WindowsAndMessaging::{
-        SetWindowPos, ShowWindow, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-        SWP_SHOWWINDOW, SW_SHOWNOACTIVATE,
-    };
-
-    let Some(hwnd) = capsule_window_hwnd(window) else {
-        return false;
-    };
-
-    let _ = unsafe { ShowWindow(hwnd, SW_SHOWNOACTIVATE) };
-    let _ = unsafe {
-        SetWindowPos(
-            hwnd,
-            HWND_TOPMOST,
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
-        )
-    };
-    true
+    // Raw ShowWindow bypasses Tao's cached VISIBLE flag. A subsequent cursor/
+    // style update can hide the HWND again. Keep show/hide in the same owner.
+    // Non-focusable sets WS_EX_NOACTIVATE, so showing cannot steal dictation focus.
+    match crate::capsule_window::set_visible(window, true) {
+        Ok(()) => true,
+        Err(error) => {
+            log::warn!("[capsule] framework show failed: {error}");
+            false
+        }
+    }
 }
 
 // macOS / Linux 上不走 no-activate 路径：胶囊由 emit_capsule 的 fallback
@@ -4851,8 +4839,7 @@ fn show_capsule_window_no_activate<R: tauri::Runtime>(
 #[cfg(target_os = "windows")]
 fn hide_capsule_window_if_present<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
     use windows::Win32::UI::WindowsAndMessaging::{
-        SetWindowPos, ShowWindow, HWND_NOTOPMOST, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE,
-        SWP_NOSIZE, SW_HIDE,
+        ShowWindow, SW_HIDE,
     };
 
     let Some(hwnd) = capsule_window_hwnd(window) else {
@@ -4860,17 +4847,7 @@ fn hide_capsule_window_if_present<R: tauri::Runtime>(window: &tauri::WebviewWind
     };
 
     let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
-    let _ = unsafe {
-        SetWindowPos(
-            hwnd,
-            HWND_NOTOPMOST,
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_HIDEWINDOW,
-        )
-    };
+    // Do not clear TOPMOST behind Tao's back; it remains part of capsule config.
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -4958,11 +4935,15 @@ fn emit_capsule(
             // invisible transparent WebView can remain in hit testing for a short time.
             set_capsule_cursor_passthrough(&window, true);
             hide_capsule_window_if_present(&window);
-            let _ = window.hide();
+            if let Err(error) = crate::capsule_window::set_visible(&window, false) {
+                log::warn!("[capsule] framework hide failed: {error}");
+            }
         }
     });
 
-    let _ = app.emit_to("capsule", "capsule:state", payload);
+    if let Err(error) = app.emit_to("capsule", "capsule:state", payload) {
+        log::warn!("[capsule] state event delivery failed: {error}");
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

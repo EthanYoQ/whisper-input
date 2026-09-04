@@ -9,6 +9,7 @@ import {
   isTauri,
 } from '../lib/ipc';
 import type { SelectionPolishStatePayload } from '../lib/types';
+import { asyncSubscription } from '../lib/asyncSubscription';
 
 export function SelectionPolishPanel() {
   const { t } = useTranslation();
@@ -20,9 +21,9 @@ export function SelectionPolishPanel() {
 
   useEffect(() => {
     if (!isTauri) return;
-    let unlisten: (() => void) | undefined;
-    void import('@tauri-apps/api/event').then(async ({ listen }) => {
-      unlisten = await listen<SelectionPolishStatePayload>(
+    const stop = asyncSubscription(async () => {
+      const { listen } = await import('@tauri-apps/api/event');
+      return listen<SelectionPolishStatePayload>(
         'selection-polish:state',
         event => {
           const payload = event.payload;
@@ -33,13 +34,18 @@ export function SelectionPolishPanel() {
           setBusy(false);
         },
       );
+    }, error => {
+      console.warn('[selection-polish] listener failed', error);
+      setStatus('error');
+      setErrorCode('listenerUnavailable');
+      setBusy(false);
     });
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') void cancelSelectionPolish();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => {
-      unlisten?.();
+      stop();
       window.removeEventListener('keydown', onKeyDown);
     };
   }, []);
@@ -117,11 +123,13 @@ export function SelectionPolishPanel() {
 }
 
 const shellStyle: React.CSSProperties = {
-  minHeight: '100vh',
-  background: 'rgba(250, 250, 249, 0.96)',
-  border: '0.5px solid var(--ol-line)',
+  width: '100%',
+  height: '100vh',
+  background: 'linear-gradient(180deg, var(--lg-float-top), var(--lg-float-bottom))',
+  border: '0.5px solid var(--lg-float-border)',
   borderRadius: 12,
-  color: 'var(--ol-ink-1)',
+  color: 'var(--ol-ink)',
+  boxShadow: 'var(--lg-float-shadow)',
   fontFamily: 'var(--ol-font-sans)',
   overflow: 'hidden',
 };
@@ -156,12 +164,12 @@ const textareaStyle: React.CSSProperties = {
   padding: 12,
   borderRadius: 8,
   border: '0.5px solid var(--ol-line-strong)',
-  background: 'var(--ol-surface-1)',
-  color: 'var(--ol-ink-1)',
+  background: 'transparent',
+  color: 'var(--ol-ink)',
   font: 'inherit',
   lineHeight: 1.6,
 };
 
 const metaStyle: React.CSSProperties = { fontSize: 12, color: 'var(--ol-ink-4)' };
 const stateStyle: React.CSSProperties = { minHeight: 210, display: 'grid', placeItems: 'center', color: 'var(--ol-ink-3)' };
-const errorStyle: React.CSSProperties = { fontSize: 12, color: 'var(--ol-danger)' };
+const errorStyle: React.CSSProperties = { fontSize: 12, color: 'var(--ol-err)' };

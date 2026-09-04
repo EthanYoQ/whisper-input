@@ -5,8 +5,9 @@
  * https://github.com/stormaref/LiquidGlassSkill
  *
  * Tauri 适配要点（与原 skill 的关键差异）:
- * - 窗口级玻璃面（外壳/侧边栏/胶囊/浮窗）的模糊由 OS 合成器提供
- *   (Windows Mica/Acrylic, macOS NSVisualEffectView)。透明 webview 里
+ * - 主窗口玻璃面的模糊由 OS 合成器提供（Windows Acrylic，失败时 Mica、
+ *   macOS NSVisualEffectView）。胶囊与浮窗使用可读性优先
+ *   的半透明实体表面，不把 CSS backdrop-filter 冒充原生窗口模糊。透明 webview 里
  *   CSS backdrop-filter 在窗口根层级没有可采样的 DOM 内容，因此窗口级
  *   token 一律不含 backdrop-filter —— CSS 只负责 tint、rim、描边、阴影。
  * - 「玻璃需要背景」这条规则由真实桌面满足：壁纸透过 Mica/Acrylic
@@ -14,9 +15,9 @@
  * - 只有窗口内部浮层（如下拉菜单浮在页面内容上）才允许用
  *   backdrop-filter（采样窗口内 DOM),见 --lg-pop-*。
  *
- * 整体透明度：填充类 token 的 alpha 一律经 calc(α × var(--lg-alpha-scale, 1))
+ * 整体透明度：主窗口填充 token 的 alpha 经 calc(α × var(--lg-alpha-scale, 1))
  * 缩放（设置页「玻璃面板不透明度」滑杆,见 lib/glassAlpha.ts)。rim 高光、
- * 描边、墨色不参与缩放 —— 调低填充时玻璃更通透,但边缘识别与文字对比不变。
+ * 描边、墨色和无原生模糊的文字浮窗不参与缩放。
  */
 
 :root {
@@ -34,29 +35,31 @@
 
   --lg-border: rgba(30, 33, 45, 0.12);
 
-  /* 侧边栏薄纱:胶囊配方的窗口级版本 —— 低 alpha 烟熏纱,让
-     Acrylic/Mica 模糊过的壁纸色相直接透进来,导航文字靠
-     模糊本身(而非更不透明的纱)保持可读。 */
+  /* KIMI d724b2e 父玻璃基线：侧栏要有足够 tint 才能在 Acrylic 上读作
+     一张独立玻璃，而不是与桌面混成没有边界的灰雾。透明度问题由子层解决，
+     不再通过削薄父玻璃来掩盖。 */
   --lg-sidebar-top: rgb(255 255 255 / calc(0.26 * var(--lg-alpha-scale, 1)));
   --lg-sidebar-bottom: rgb(255 255 255 / calc(0.16 * var(--lg-alpha-scale, 1)));
 
-  /* Arc 式正文 sheet:顶→底微渐变 tint(同胶囊配方),真半透明。
-     与侧边栏同族、只高半档 —— 0.8 档的奶白硬板会和周边的
-     低透明度玻璃产生割裂感;正文可读性由 OS 模糊兜底。 */
-  --lg-sheet-top: rgb(253 254 255 / calc(0.60 * var(--lg-alpha-scale, 1)));
-  --lg-sheet-bottom: rgb(244 247 252 / calc(0.52 * var(--lg-alpha-scale, 1)));
+  /* Light 正文与侧栏共用同一材质，避免大片正文读成白板。
+     子分组保持透明；Dark 在下方独立覆写，不受影响。 */
+  --lg-sheet-top: var(--lg-sidebar-top);
+  --lg-sheet-bottom: var(--lg-sidebar-bottom);
   --lg-sheet-ring: rgba(15, 23, 42, 0.05);
   --lg-sheet-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
   --lg-sheet-radius: 16px;
 
-  /* 导航选中态:抬起的白色 chip(Arc 活动标签),不再用左侧色条。 */
-  --lg-nav-active: rgb(255 255 255 / calc(0.68 * var(--lg-alpha-scale, 1)));
-  --lg-nav-active-ring: rgba(15, 23, 42, 0.06);
-  --lg-nav-active-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-  --lg-nav-hover: rgb(255 255 255 / calc(0.34 * var(--lg-alpha-scale, 1)));
+  /* 导航选中项属于 chip tier：保留轻微可见反馈，但从 KIMI 的 68% 白块
+     降为 28%→16% 的无色薄纱，不再与侧栏父玻璃累加成白板。 */
+  --lg-nav-active: linear-gradient(155deg,
+    rgb(255 255 255 / calc(0.28 * var(--lg-alpha-scale, 1))),
+    rgb(179 179 179 / calc(0.16 * var(--lg-alpha-scale, 1))));
+  --lg-nav-active-ring: rgba(15, 23, 42, 0.035);
+  --lg-nav-active-shadow: 0 2px 8px rgba(15, 23, 42, 0.045);
+  --lg-nav-hover: rgb(255 255 255 / calc(0.10 * var(--lg-alpha-scale, 1)));
 
   /* 录音胶囊(Raycast Dictation Pill 档):浮在任意桌面上都要可读,
-     所以比 6% 更实的奶白磨砂 + 强 rim;Acrylic 在背后供模糊。 */
+     所以使用可读性优先的奶白半透明实体面 + 强 rim。 */
   --lg-pill-top: rgb(255 255 255 / calc(0.46 * var(--lg-alpha-scale, 1)));
   --lg-pill-bottom: rgb(240 244 250 / calc(0.28 * var(--lg-alpha-scale, 1)));
   --lg-pill-border: rgba(255, 255, 255, 0.60);
@@ -66,8 +69,10 @@
   --lg-pill-chip-dim: rgb(255 255 255 / calc(0.28 * var(--lg-alpha-scale, 1)));
 
   /* 浮窗(QA / 划词润色,CleanShot X 档):可读优先的奶白磨砂。 */
-  --lg-float-top: rgb(255 255 255 / calc(0.72 * var(--lg-alpha-scale, 1)));
-  --lg-float-bottom: rgb(246 248 252 / calc(0.60 * var(--lg-alpha-scale, 1)));
+  /* Text floats have no native backdrop. Keep one readable surface, independent
+     of the main window's glass slider; never compound inner glass panels. */
+  --lg-float-top: rgb(255 255 255 / 0.94);
+  --lg-float-bottom: rgb(246 248 252 / 0.90);
   --lg-float-border: rgba(255, 255, 255, 0.55);
   --lg-float-shadow: 0 18px 50px rgba(15, 23, 42, 0.20), 0 3px 10px rgba(15, 23, 42, 0.08);
 
@@ -120,8 +125,8 @@
   --lg-pill-chip: rgb(255 255 255 / calc(0.14 * var(--lg-alpha-scale, 1)));
   --lg-pill-chip-dim: rgb(255 255 255 / calc(0.07 * var(--lg-alpha-scale, 1)));
 
-  --lg-float-top: rgb(30 32 40 / calc(0.78 * var(--lg-alpha-scale, 1)));
-  --lg-float-bottom: rgb(26 28 35 / calc(0.64 * var(--lg-alpha-scale, 1)));
+  --lg-float-top: rgb(30 32 40 / 0.94);
+  --lg-float-bottom: rgb(26 28 35 / 0.90);
   --lg-float-border: rgba(255, 255, 255, 0.10);
   --lg-float-shadow: 0 22px 56px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
 
@@ -134,6 +139,45 @@
     rgb(255 255 255 / calc(0.04 * var(--lg-alpha-scale, 1))));
   --ol-card-bg: var(--lg-card-bg);
   --wi-panel: rgb(255 255 255 / calc(0.05 * var(--lg-alpha-scale, 1)));
+}
+
+/* Only an explicit native failure enables this opaque backing. Unknown status
+   must not destroy the working KIMI material. Forced colors takes precedence. */
+@media (forced-colors: none) {
+  html[data-window-kind='main'][data-native-material='fallback'] {
+    background: #edf1f7;
+  }
+  html[data-window-kind='main'][data-native-material='fallback'][data-theme='dark'] {
+    background: #202228;
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --lg-sidebar-top: Canvas;
+    --lg-sidebar-bottom: Canvas;
+    --lg-sheet-top: Canvas;
+    --lg-sheet-bottom: Canvas;
+    --lg-nav-active: Highlight;
+    --lg-pill-top: Canvas;
+    --lg-pill-bottom: Canvas;
+    --lg-float-top: Canvas;
+    --lg-float-bottom: Canvas;
+    --lg-float-border: CanvasText;
+    --lg-card-bg: Canvas;
+    --ol-card-bg: Canvas;
+    --wi-panel: Canvas;
+    --wi-control: ButtonFace;
+    --wi-control-muted: Canvas;
+    --wi-control-active: Highlight;
+  }
+
+  html,
+  body,
+  #root {
+    background: Canvas !important;
+    color: CanvasText !important;
+  }
 }
 
 /* 全局动效压制:系统「减少动态效果」时,所有玻璃微动效立即归零。 */

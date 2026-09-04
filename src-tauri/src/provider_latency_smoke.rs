@@ -8,7 +8,7 @@ use serde::Serialize;
 
 use crate::asr::{AudioConsumer, QwenRealtimeASR, QwenRealtimeCredentials};
 use crate::llm_gemini::{GeminiConfig, GeminiProvider, GEMINI_DEFAULT_BASE_URL};
-use crate::persistence::{CredentialAccount, CredentialsVault};
+use crate::persistence::CredentialAccount;
 use crate::polish::{
     llm_config_for_preset, OpenAICompatibleLLMProvider, DOUBAO_LLM_DEFAULT_MODEL,
     QWEN_LLM_DEFAULT_MODEL,
@@ -949,16 +949,24 @@ fn first_non_blank(accounts: &[CredentialAccount]) -> Option<String> {
 }
 
 fn credential(account: CredentialAccount) -> Option<String> {
-    CredentialsVault::get(account)
-        .ok()
-        .flatten()
-        .filter(|value| !value.trim().is_empty())
+    explicit_smoke_credential(&format!("{account:?}"))
 }
 
 fn provider_llm_api_key(provider_id: &str) -> Option<String> {
-    CredentialsVault::get_llm_provider_api_key_for_smoke(provider_id)
-        .ok()
-        .flatten()
+    explicit_smoke_credential(&format!("llm:{provider_id}"))
+}
+
+// Ignored live-provider probes require explicit caller-supplied credentials;
+// normal unit tests must never read or migrate the user's OS credential vault.
+// JSON keys are CredentialAccount names (e.g. AsrQwenApiKey, LlmQwenApiKey)
+// or llm:<provider-id>. Never log the environment variable or its decoded value.
+fn explicit_smoke_credential(key: &str) -> Option<String> {
+    let raw = std::env::var("WHISPER_INPUT_SMOKE_CREDENTIALS").ok()?;
+    let values: std::collections::HashMap<String, String> = serde_json::from_str(&raw).ok()?;
+    values
+        .get(key)
+        .filter(|value| !value.trim().is_empty())
+        .cloned()
 }
 
 fn preview(value: &str, max_chars: usize) -> String {

@@ -157,10 +157,11 @@ function WindowsResizeHandles() {
   ];
 
   return (
-    <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 60 }}>
+    <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 80 }}>
       {handles.map(handle => (
         <div
           key={handle.direction}
+          data-window-resize={handle.direction}
           onMouseDown={event => {
             if (event.button !== 0) return;
             event.preventDefault();
@@ -230,7 +231,8 @@ async function runWindowsWindowAction(action: 'minimize' | 'toggleMaximize' | 'c
     } else if (action === 'toggleMaximize') {
       await currentWindow.toggleMaximize();
     } else {
-      await currentWindow.hide();
+      // Rust intercepts close to hide and cancel pending focus-loss work.
+      await currentWindow.close();
     }
   } catch (error) {
     console.warn(`[window] Windows title button ${action} failed`, error);

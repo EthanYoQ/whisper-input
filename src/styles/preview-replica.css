@@ -151,8 +151,9 @@
   box-shadow: var(--wi-inset-ring-soft), 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.wi-icon-btn {
-  min-width: 58px;
+.wi-commandbar .wi-btn.wi-icon-btn {
+  width: 38px;
+  min-width: 38px;
   padding: 0;
 }
 
@@ -254,6 +255,7 @@
 /* 选中态 = 抬起的玻璃 chip(Arc 活动标签),不再用左侧色条。 */
 .wi-side-nav button.active {
   color: var(--wi-blue);
+  font-weight: 600;
   background: var(--lg-nav-active);
   box-shadow: inset 0 0 0 0.5px var(--lg-nav-active-ring), var(--lg-nav-active-shadow);
 }
@@ -639,6 +641,19 @@
   line-height: 1.5;
 }
 
+.wi-settings-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.wi-settings-tools {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
 .wi-settings-tabs {
   display: flex;
   justify-content: space-between;
@@ -650,7 +665,7 @@
   min-width: 0;
   border: 0;
   border-radius: 12px;
-  overflow: hidden;
+  overflow-x: auto;
   background: rgb(255 255 255 / calc(0.22 * var(--lg-alpha-scale, 1)));
   box-shadow: var(--wi-inset-ring-soft), 0 10px 26px -24px rgba(15, 23, 42, 0.32);
 }
@@ -1504,17 +1519,15 @@
 }
 
 .wi-week-empty {
-  position: absolute;
-  inset: 0;
+  height: 100%;
+  min-height: 122px;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1;
-  pointer-events: none;
   color: var(--wi-muted);
   font-size: 14px;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.72);
+  background: transparent;
 }
 
 .wi-recent-list {
@@ -1628,7 +1641,7 @@
 .wi-overview-page .wi-metric-card,
 .wi-overview-page .wi-week-card,
 .wi-overview-page .wi-recent-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 252, 255, 0.96));
+  background: transparent;
 }
 
 .wi-overview-page .wi-provider-card:hover,
@@ -1652,11 +1665,11 @@
 }
 
 .wi-overview-page .wi-provider-card-asr {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(250, 248, 255, 0.96));
+  background: transparent;
 }
 
 .wi-overview-page .wi-provider-card-llm {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(246, 251, 255, 0.96));
+  background: transparent;
 }
 
 .wi-overview-page .wi-model-logo {
@@ -1762,8 +1775,8 @@
   padding: 14px 18px 10px;
   border: 0;
   border-radius: 16px;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.92), rgba(255, 255, 255, 0.72));
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.055);
+  background: transparent;
+  box-shadow: none;
 }
 
 .wi-overview-page .wi-week-y-axis,
@@ -1815,8 +1828,8 @@
   padding: 11px 14px;
   border: 0;
   border-radius: 12px;
-  background: rgba(248, 250, 252, 0.74);
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.055);
+  background: transparent;
+  box-shadow: none;
   font-size: 13px;
 }
 
@@ -1937,27 +1950,28 @@
   box-shadow: none;
 }
 
-/* 模型双卡 / 指标四连 → 单描边分组容器,内部细分隔线。
-   注意不能加 overflow:hidden:它会把 flex min-height 归零,
-   窄窗口 stacked 时卡片会被压缩裁切(圆角裁切改靠内部透明,无需 overflow)。 */
-.wi-overview-page .wi-model-grid,
-.wi-overview-page .wi-metric-grid {
-  gap: 0;
-  border: 1px solid var(--wi-line-soft);
-  border-radius: 12px;
-  background: var(--lg-card-bg);
+/* Light Overview uses one glass surface only: the parent sheet. Its children
+   paint no background, border, rim or second radius; spacing and type carry
+   grouping, so nested white opacity cannot accumulate. */
+.wi-overview-page .wi-model-grid {
+  gap: 22px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
-.wi-overview-page .wi-provider-card + .wi-provider-card,
-.wi-overview-page .wi-metric-card + .wi-metric-card {
-  border-left: 1px solid var(--wi-line-soft);
+.wi-overview-page .wi-metric-grid {
+  gap: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
-/* 底部双面板:同样的描边分组语言 */
+/* 底部内容同样直接落在 sheet 上，不另画两块白色卡片。 */
 .wi-overview-page .wi-week-card,
 .wi-overview-page .wi-recent-card {
-  border: 1px solid var(--wi-line-soft);
-  border-radius: 12px;
-  background: var(--lg-card-bg);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 /* 面板标题降噪:18px/800 → 15px/650 */
@@ -1982,6 +1996,7 @@
 .wi-overview-page .wi-chart-note {
   background: transparent;
   box-shadow: none;
+  border-radius: 0;
   padding: 11px 2px 0;
 }
 
@@ -1998,11 +2013,12 @@
 :root[data-theme='dark'] .wi-overview-page .wi-week-card,
 :root[data-theme='dark'] .wi-overview-page .wi-recent-card {
   background: var(--lg-card-bg);
-  border-color: rgba(255, 255, 255, 0.07);
+  border: 0.5px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
 }
 :root[data-theme='dark'] .wi-overview-page .wi-provider-card + .wi-provider-card,
 :root[data-theme='dark'] .wi-overview-page .wi-metric-card + .wi-metric-card {
-  border-left-color: rgba(255, 255, 255, 0.07);
+  border-left: 0.5px solid rgba(255, 255, 255, 0.07);
 }
 :root[data-theme='dark'] .wi-overview-page .wi-week-chart,
 :root[data-theme='dark'] .wi-overview-page .wi-chart-note {
@@ -3135,7 +3151,7 @@
   min-height: 112px;
   padding: 18px 20px;
   grid-template-columns: 60px minmax(0, 1fr) auto;
-  border-radius: 16px;
+  border-radius: 0;
 }
 
 .wi-overview-page .wi-model-logo {
@@ -3151,13 +3167,13 @@
 .wi-overview-page .wi-metric-card {
   height: 98px;
   padding: 16px 18px;
-  border-radius: 16px;
+  border-radius: 0;
 }
 
 .wi-overview-page .wi-week-card,
 .wi-overview-page .wi-recent-card {
   padding: 18px;
-  border-radius: 16px;
+  border-radius: 0;
 }
 
 .wi-overview-page .wi-week-y-axis,
@@ -3271,7 +3287,6 @@
 
   .wi-settings-tabs {
     max-width: 100%;
-    margin-top: 54px;
     overflow-x: auto;
     justify-content: flex-start;
   }
@@ -3330,38 +3345,28 @@
   }
 }
 
-/* 窄窗口(≤1100px)下分组盒内分隔线换向:provider 卡片纵向堆叠改用
-   顶部分隔线;metric 2×2 时偶数位竖线 + 第二行横线。放在原有媒体查询
-   之后,同优先级靠顺序覆盖其 gap。 */
+/* Dark 仍保留 KIMI 的低 alpha 分组卡，因此窄窗口需要给它的分隔线换向。
+   Light 是单层 sheet：保持上方媒体查询的间距，不重新引入边框或第二表面。 */
 @media (max-width: 1100px) {
-  .wi-overview-page .wi-model-grid,
-  .wi-overview-page .wi-metric-grid {
+  :root[data-theme='dark'] .wi-overview-page .wi-model-grid,
+  :root[data-theme='dark'] .wi-overview-page .wi-metric-grid {
     gap: 0;
   }
 
-  .wi-overview-page .wi-provider-card + .wi-provider-card {
+  :root[data-theme='dark'] .wi-overview-page .wi-provider-card + .wi-provider-card {
     border-left: 0;
-    border-top: 1px solid var(--wi-line-soft);
+    border-top: 0.5px solid rgba(255, 255, 255, 0.07);
   }
 
-  .wi-overview-page .wi-metric-card + .wi-metric-card {
+  :root[data-theme='dark'] .wi-overview-page .wi-metric-card + .wi-metric-card {
     border-left: 0;
   }
 
-  .wi-overview-page .wi-metric-card:nth-child(even) {
-    border-left: 1px solid var(--wi-line-soft);
-  }
-
-  .wi-overview-page .wi-metric-card:nth-child(n + 3) {
-    border-top: 1px solid var(--wi-line-soft);
-  }
-
-  :root[data-theme='dark'] .wi-overview-page .wi-provider-card + .wi-provider-card,
   :root[data-theme='dark'] .wi-overview-page .wi-metric-card:nth-child(even) {
-    border-color: rgba(255, 255, 255, 0.07);
+    border-left: 0.5px solid rgba(255, 255, 255, 0.07);
   }
 
   :root[data-theme='dark'] .wi-overview-page .wi-metric-card:nth-child(n + 3) {
-    border-top-color: rgba(255, 255, 255, 0.07);
+    border-top: 0.5px solid rgba(255, 255, 255, 0.07);
   }
 }
