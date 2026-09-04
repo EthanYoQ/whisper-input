@@ -80,6 +80,7 @@ core-graphics = "0.24"
 objc2 = "0.5"
 objc2-foundation = "0.2"
 objc2-app-kit = "0.2"
+window-vibrancy = "0.6"
 # antirez/qwen-asr 用 malloc 分配返回字符串，必须用 C `free()` 释放。
 libc = "0.2"
 
@@ -104,10 +105,9 @@ windows = { version = "0.58", features = [
   "Win32_UI_WindowsAndMessaging",
 ] }
 winreg = "0.52"
-
-# 跨平台磨砂层（macOS NSVisualEffectView / Windows Mica）。
-[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
-window-vibrancy = "0.6"
+# KIMI d724b2e 的 Windows Acrylic 视觉以 0.7 为基线。使用别名让 macOS
+# 继续与 Tauri 内置的 0.6 对齐，避免同一目标链接两套 Objective-C 符号。
+window-vibrancy-win = { package = "window-vibrancy", version = "0.7" }
 
 [features]
 default = ["custom-protocol"]

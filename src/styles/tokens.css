@@ -16,7 +16,7 @@
   /* 控件层薄纱(下拉/输入/小按钮):不再用不透明 #f8f8f9 铺面,
      否则叠在 sheet 上层层累加成白板、透不出壁纸色相。
      --ol-surface(模态/浮窗级霜面)保持不透,控件级一律走这里。 */
-  --ol-surface-2: rgb(255 255 255 / calc(0.18 * var(--lg-alpha-scale, 1)));
+  --ol-surface-2: rgb(255 255 255 / calc(0.45 * var(--lg-alpha-scale, 1)));
   --ol-surface-3: #f1f2f4;
   --ol-line: rgba(0, 0, 0, 0.09);
   --ol-line-strong: rgba(0, 0, 0, 0.14);

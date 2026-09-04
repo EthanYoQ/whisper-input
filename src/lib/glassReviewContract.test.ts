@@ -11,6 +11,7 @@ const shellSource = readFileSync(new URL('../components/FloatingShell.tsx', impo
 const mainSource = readFileSync(new URL('../main.tsx', import.meta.url), 'utf8');
 const alphaSource = readFileSync(new URL('./glassAlpha.ts', import.meta.url), 'utf8');
 const glassCss = readFileSync(new URL('../styles/glass.css', import.meta.url), 'utf8');
+const previewCss = readFileSync(new URL('../styles/preview-replica.css', import.meta.url), 'utf8');
 const tokensCss = readFileSync(new URL('../styles/tokens.css', import.meta.url), 'utf8');
 const nativeSource = readFileSync(new URL('../../src-tauri/src/lib.rs', import.meta.url), 'utf8');
 const cargoToml = readFileSync(new URL('../../src-tauri/Cargo.toml', import.meta.url), 'utf8');
@@ -38,15 +39,17 @@ assert(
 );
 assert(mainSource.includes('startGlassAlphaSync()'), 'every frontend window must start glass-alpha sync');
 assert(
-  tokensCss.includes('--ol-surface-2: rgb(255 255 255 / calc(0.18 * var(--lg-alpha-scale, 1)))'),
-  'ordinary light-theme controls must not return to the stacked 45% white veil',
+  tokensCss.includes('--ol-surface-2: rgb(255 255 255 / calc(0.45 * var(--lg-alpha-scale, 1)))') &&
+    previewCss.includes('--wi-control: rgb(255 255 255 / calc(0.45 * var(--lg-alpha-scale, 1)))') &&
+    previewCss.includes('--wi-control-active: rgb(255 255 255 / calc(0.78 * var(--lg-alpha-scale, 1)))') &&
+    glassCss.includes('--lg-nav-active: rgb(255 255 255 / calc(0.68 * var(--lg-alpha-scale, 1)))'),
+  'KIMI d724b2e control and navigation material strengths must remain the visual baseline',
 );
 
 assert(
   nativeSource.includes('apply_acrylic(&main, None)') &&
     nativeSource.includes('apply_mica(&main, None)') &&
-    nativeSource.indexOf('apply_acrylic(&main, None)') < nativeSource.indexOf('apply_mica(&main, None)') &&
-    nativeSource.includes('mark_native_glass_enabled(&main)'),
+    nativeSource.indexOf('apply_acrylic(&main, None)') < nativeSource.indexOf('apply_mica(&main, None)'),
   'Windows must preserve the approved Acrylic visual and use Mica only as its fallback',
 );
 assert(
@@ -60,19 +63,21 @@ assert(
   'the unsupported Windows 8+ capsule blur-behind path must not return',
 );
 assert(
-  glassCss.includes("html[data-window-kind='main']:not([data-native-glass='on'])") &&
-    glassCss.includes('@media (forced-colors: active)') &&
-    glassCss.includes('@media (prefers-reduced-transparency: reduce)'),
-  'native-glass failure and accessibility modes must retain an opaque readable fallback',
+  !glassCss.includes("html[data-window-kind='main']:not([data-native-glass='on'])") &&
+    !glassCss.includes('@media (prefers-reduced-transparency: reduce)') &&
+    glassCss.includes('@media (forced-colors: active)'),
+  'the main window must preserve KIMI transparency while forced-colors keeps its explicit accessibility fallback',
 );
 
 assert(
-  cargoToml.includes('window-vibrancy = "0.6"'),
-  'the direct window-vibrancy dependency must align with Tauri to avoid duplicate macOS symbols',
+  cargoToml.includes('window-vibrancy = "0.6"') &&
+    cargoToml.includes('window-vibrancy-win = { package = "window-vibrancy", version = "0.7" }') &&
+    nativeSource.includes('use window_vibrancy_win::{apply_acrylic, apply_mica};'),
+  'macOS must align with Tauri 0.6 while Windows retains KIMI window-vibrancy 0.7',
 );
 assert(
-  (cargoLock.match(/name = "window-vibrancy"/g) ?? []).length === 1,
-  'Cargo.lock must contain exactly one window-vibrancy version',
+  (cargoLock.match(/name = "window-vibrancy"/g) ?? []).length === 2,
+  'Cargo.lock must contain the platform-specific 0.6 and 0.7 window-vibrancy versions',
 );
 
 assert(existsSync(interLicenseUrl), 'the redistributed Inter font must include its license');

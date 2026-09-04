@@ -22,9 +22,9 @@
   --wi-orange: #f59e0b;
   --wi-orange-soft: rgb(245 158 11 / calc(0.10 * var(--lg-alpha-scale, 1)));
   --wi-red: #ef4444;
-  --wi-control: rgb(255 255 255 / calc(0.18 * var(--lg-alpha-scale, 1)));
+  --wi-control: rgb(255 255 255 / calc(0.45 * var(--lg-alpha-scale, 1)));
   --wi-control-muted: rgb(15 23 42 / calc(0.045 * var(--lg-alpha-scale, 1)));
-  --wi-control-active: rgb(255 255 255 / calc(0.20 * var(--lg-alpha-scale, 1)));
+  --wi-control-active: rgb(255 255 255 / calc(0.78 * var(--lg-alpha-scale, 1)));
   --wi-danger-line: #fecaca;
   --wi-pill-green-text: #15803d;
   --wi-pill-orange-text: #c87900;

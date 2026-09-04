@@ -5,8 +5,8 @@
  * https://github.com/stormaref/LiquidGlassSkill
  *
  * Tauri 适配要点（与原 skill 的关键差异）:
- * - 主窗口玻璃面的模糊由 OS 合成器提供（Windows 11 Mica、Windows 10
- *   Acrylic fallback、macOS NSVisualEffectView）。胶囊与浮窗使用可读性优先
+ * - 主窗口玻璃面的模糊由 OS 合成器提供（Windows Acrylic，失败时 Mica、
+ *   macOS NSVisualEffectView）。胶囊与浮窗使用可读性优先
  *   的半透明实体表面，不把 CSS backdrop-filter 冒充原生窗口模糊。透明 webview 里
  *   CSS backdrop-filter 在窗口根层级没有可采样的 DOM 内容，因此窗口级
  *   token 一律不含 backdrop-filter —— CSS 只负责 tint、rim、描边、阴影。
@@ -21,7 +21,6 @@
  */
 
 :root {
-  --wi-window-fallback: #edf1f7;
   /* 无色 tint:6% 白→70% 灰，双色一致。颜色必须来自玻璃背后的内容，
      给 tint 上色只会让表面变浑浊(skill 规则 2)。 */
   --lg-tint-top: rgb(255 255 255 / calc(0.06 * var(--lg-alpha-scale, 1)));
@@ -52,7 +51,7 @@
   --lg-sheet-radius: 16px;
 
   /* 导航选中态:抬起的白色 chip(Arc 活动标签),不再用左侧色条。 */
-  --lg-nav-active: rgb(255 255 255 / calc(0.18 * var(--lg-alpha-scale, 1)));
+  --lg-nav-active: rgb(255 255 255 / calc(0.68 * var(--lg-alpha-scale, 1)));
   --lg-nav-active-ring: rgba(15, 23, 42, 0.06);
   --lg-nav-active-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
   --lg-nav-hover: rgb(255 255 255 / calc(0.34 * var(--lg-alpha-scale, 1)));
@@ -89,7 +88,6 @@
 }
 
 :root[data-theme='dark'] {
-  --wi-window-fallback: #171920;
   /* 同样无色的 tint,只换框架色。 */
   --lg-rim-top: rgba(255, 255, 255, 0.50);
   --lg-rim-hairline: rgba(255, 255, 255, 0.10);
@@ -137,22 +135,6 @@
     rgb(255 255 255 / calc(0.04 * var(--lg-alpha-scale, 1))));
   --ol-card-bg: var(--lg-card-bg);
   --wi-panel: rgb(255 255 255 / calc(0.05 * var(--lg-alpha-scale, 1)));
-}
-
-/* 原生合成器成功后 Rust 才设置 data-native-glass=on。失败或系统禁用透明
-   时，主窗口默认落在实体底色上，避免直接透出桌面内容。 */
-html[data-window-kind='main']:not([data-native-glass='on']),
-html[data-window-kind='main']:not([data-native-glass='on']) body,
-html[data-window-kind='main']:not([data-native-glass='on']) #root {
-  background: var(--wi-window-fallback);
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  html,
-  body,
-  #root {
-    background: var(--wi-window-fallback) !important;
-  }
 }
 
 @media (forced-colors: active) {

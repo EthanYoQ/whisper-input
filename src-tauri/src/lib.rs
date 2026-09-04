@@ -168,39 +168,30 @@ pub fn run() {
                     if let Err(e) = main.set_decorations(true) {
                         log::warn!("[main] enable native decorations failed: {e}");
                     }
-                    match apply_vibrancy(
+                    if let Err(e) = apply_vibrancy(
                         &main,
                         NSVisualEffectMaterial::HudWindow,
                         Some(NSVisualEffectState::Active),
                         Some(20.0),
                     ) {
-                        Ok(()) => mark_native_glass_enabled(&main),
-                        Err(e) => log::warn!("[main] vibrancy failed; using solid fallback: {e}"),
+                        log::warn!("[main] vibrancy unavailable: {e}");
                     }
                 }
                 #[cfg(target_os = "windows")]
                 {
-                    use window_vibrancy::{apply_acrylic, apply_mica};
+                    use window_vibrancy_win::{apply_acrylic, apply_mica};
                     // The window starts hidden so Windows native chrome can be disabled before
                     // the first show; doing this after the native frame is visible is unreliable.
                     if let Err(e) = main.set_decorations(false) {
                         log::warn!("[main] disable native decorations failed: {e}");
                     }
-                    let native_glass_enabled = match apply_acrylic(&main, None) {
-                        Ok(()) => true,
-                        Err(acrylic_error) => {
-                            log::info!("[main] acrylic unavailable, trying Mica fallback: {acrylic_error}");
-                            match apply_mica(&main, None) {
-                                Ok(()) => true,
-                                Err(mica_error) => {
-                                    log::warn!("[main] native glass failed; using solid fallback: {mica_error}");
-                                    false
-                                }
-                            }
+                    if let Err(acrylic_error) = apply_acrylic(&main, None) {
+                        log::info!(
+                            "[main] acrylic unavailable, trying Mica fallback: {acrylic_error}"
+                        );
+                        if let Err(mica_error) = apply_mica(&main, None) {
+                            log::warn!("[main] native glass unavailable: {mica_error}");
                         }
-                    };
-                    if native_glass_enabled {
-                        mark_native_glass_enabled(&main);
                     }
                     apply_windows_rounded_frame(&main);
                 }
@@ -782,14 +773,6 @@ fn apply_windows_rounded_frame<R: Runtime>(window: &tauri::WebviewWindow<R>) {
         if SetWindowRgn(hwnd, region, BOOL(1)) == 0 {
             log::warn!("[main] apply rounded window region failed");
         }
-    }
-}
-
-fn mark_native_glass_enabled<R: Runtime>(window: &tauri::WebviewWindow<R>) {
-    if let Err(error) =
-        window.eval("document.documentElement.setAttribute('data-native-glass', 'on')")
-    {
-        log::warn!("[main] failed to mark native glass as enabled: {error}");
     }
 }
 

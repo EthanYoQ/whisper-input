@@ -14,7 +14,6 @@ const windowKind = params.get("window");
 const isCapsule = windowKind === "capsule";
 const isQa = windowKind === "qa";
 const isSelectionPolish = windowKind === "selection-polish";
-document.documentElement.dataset.windowKind = windowKind ?? "main";
 
 // 首帧前落实 data-theme:glass/replica 两套 token 都按它取色,
 // 晚了会闪一帧错误主题。
