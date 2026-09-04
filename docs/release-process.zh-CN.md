@@ -2,11 +2,11 @@
 
 一个 GitHub Release 可以同时挂载 macOS 与 Windows 的多个资产。为了避免先看到只有 macOS 文件、Windows 文件散落在另一个发布页，仓库把“构建与验收”和“上传到 Release”分开：只有两个平台的文件都校验合格后，提升工作流才创建或更新同一个 Release。
 
-## 对 v1.5.2 的冻结契约
+## 对 v1.5.3 的冻结契约
 
-- 标签：`v1.5.2`
-- 源码提交：`ee635ba3fb6df3b383c92cee5d4c2d8c4561b3fa`
-- 详细资产、校验和验收基线：[`release-contracts/v1.5.2.json`](../release-contracts/v1.5.2.json)
+- 标签：`v1.5.3`
+- 源码提交：`05023b7269fb4991f8a9ebe4d8524b328382f09e`
+- 详细资产、校验和验收基线：[`release-contracts/v1.5.3.json`](../release-contracts/v1.5.3.json)
 
 Windows 构建会生成并实际验收 x64 EXE、MSI 和便携 ZIP：安装、启动、从 `v1.5.0` MSI 升级，以及卸载。它不会创建或改写 GitHub Release。
 
