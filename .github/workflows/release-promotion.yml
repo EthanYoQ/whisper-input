@@ -6,7 +6,7 @@ on:
       contract_path:
         description: 冻结的发布契约路径
         required: true
-        default: release-contracts/v1.5.2.json
+        default: release-contracts/v1.5.3.json
         type: string
       windows_run_id:
         description: 成功的 Qualify Windows installers 工作流运行 ID
