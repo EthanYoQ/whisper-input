@@ -111,6 +111,7 @@ import {
 import { PRODUCT_FEATURES } from '../lib/productMode';
 
 interface SettingsProps {
+  headerTools?: ReactNode;
   embedded?: boolean;
   initialSection?: SettingsSectionId;
 }
@@ -149,7 +150,7 @@ async function setAutostartEnabled(enabled: boolean): Promise<AutostartStatus> {
   return invoke<AutostartStatus>('set_autostart_enabled', { enabled });
 }
 
-export function Settings({ embedded = false, initialSection = 'models' }: SettingsProps) {
+export function Settings({ embedded = false, initialSection = 'models', headerTools }: SettingsProps) {
   const { t } = useTranslation();
   const [section, setSection] = useState<SettingsSectionId>(initialSection);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -191,6 +192,7 @@ export function Settings({ embedded = false, initialSection = 'models' }: Settin
           ...(embedded ? { flex: 1 } : {}),
         }}
       >
+        <div className="wi-settings-header">
         <div className="wi-settings-tabs" role="tablist" aria-label={t('settings.title')}>
           {SECTION_ORDER.map((s, index) => {
             const active = section === s;
@@ -215,6 +217,8 @@ export function Settings({ embedded = false, initialSection = 'models' }: Settin
               </button>
             );
           })}
+        </div>
+        {headerTools && <div className="wi-settings-tools">{headerTools}</div>}
         </div>
         <div
           className={[

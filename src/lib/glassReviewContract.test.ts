@@ -15,6 +15,7 @@ const glassCss = readFileSync(new URL('../styles/glass.css', import.meta.url), '
 const previewCss = readFileSync(new URL('../styles/preview-replica.css', import.meta.url), 'utf8');
 const tokensCss = readFileSync(new URL('../styles/tokens.css', import.meta.url), 'utf8');
 const nativeSource = readFileSync(new URL('../../src-tauri/src/lib.rs', import.meta.url), 'utf8');
+const materialSource = readFileSync(new URL('../../src-tauri/src/native_material.rs', import.meta.url), 'utf8');
 const cargoToml = readFileSync(new URL('../../src-tauri/Cargo.toml', import.meta.url), 'utf8');
 const cargoLock = readFileSync(new URL('../../src-tauri/Cargo.lock', import.meta.url), 'utf8');
 const interLicenseUrl = new URL('../assets/fonts/LICENSE.txt', import.meta.url);
@@ -38,7 +39,7 @@ assert(
     alphaSource.includes('listen<number>(GLASS_ALPHA_EVENT'),
   'glass alpha changes must broadcast and be consumed across Tauri windows',
 );
-assert(mainSource.includes('startGlassAlphaSync()'), 'every frontend window must start glass-alpha sync');
+assert(mainSource.includes('asyncSubscription(startGlassAlphaSync,'), 'every frontend window must start and dispose glass-alpha sync');
 assert(
   tokensCss.includes('--ol-surface-2: rgb(255 255 255 / calc(0.45 * var(--lg-alpha-scale, 1)))') &&
     previewCss.includes('--wi-control: rgb(255 255 255 / calc(0.45 * var(--lg-alpha-scale, 1)))') &&
@@ -48,12 +49,12 @@ assert(
 assert(
   glassCss.includes('--lg-sidebar-top: rgb(255 255 255 / calc(0.26 * var(--lg-alpha-scale, 1)))') &&
     glassCss.includes('--lg-sidebar-bottom: rgb(255 255 255 / calc(0.16 * var(--lg-alpha-scale, 1)))') &&
-    glassCss.includes('--lg-sheet-top: rgb(253 254 255 / calc(0.60 * var(--lg-alpha-scale, 1)))') &&
-    glassCss.includes('--lg-sheet-bottom: rgb(244 247 252 / calc(0.52 * var(--lg-alpha-scale, 1)))') &&
+    glassCss.includes('--lg-sheet-top: var(--lg-sidebar-top)') &&
+    glassCss.includes('--lg-sheet-bottom: var(--lg-sidebar-bottom)') &&
     glassCss.includes('rgb(255 255 255 / calc(0.28 * var(--lg-alpha-scale, 1)))') &&
     glassCss.includes('rgb(179 179 179 / calc(0.16 * var(--lg-alpha-scale, 1)))') &&
     glassCss.includes("--lg-nav-active: rgb(255 255 255 / calc(0.10 * var(--lg-alpha-scale, 1)))"),
-  'Light must preserve the KIMI parent glass while keeping the nested navigation chip translucent and the approved dark material unchanged',
+  'Light main sheet must share sidebar material per user request; keep nested navigation translucent and dark material unchanged',
 );
 assert(
   !previewCss.includes('--wi-overview-line:') &&
@@ -66,10 +67,10 @@ assert(
 );
 
 assert(
-  nativeSource.includes('apply_acrylic(&main, None)') &&
-    nativeSource.includes('apply_mica(&main, None)') &&
-    nativeSource.indexOf('apply_acrylic(&main, None)') < nativeSource.indexOf('apply_mica(&main, None)'),
-  'Windows must preserve the approved Acrylic visual and use Mica only as its fallback',
+  materialSource.includes('set_dwm(hwnd, 38, 3)') &&
+    materialSource.includes('set_dwm(hwnd, 38, 2)') &&
+    materialSource.includes('color: 1 << 24'),
+  'checked Windows adapter must preserve pinned 0.7.1 Acrylic and Mica parameters; its decision ordering is covered by Rust tests',
 );
 assert(
   nativeSource.includes('(style | WS_THICKFRAME.0 as i32) & !(WS_CAPTION.0 as i32)') &&
@@ -87,7 +88,8 @@ assert(
     !nativeSource.includes('EVENT_SYSTEM_FOREGROUND') &&
     nativeSource.includes('tauri::WindowEvent::Focused(false)') &&
     nativeSource.includes('schedule_main_minimize_after_focus_loss(app)') &&
-    nativeSource.includes('Duration::from_millis(75)') &&
+    nativeSource.includes('.lost_focus(monotonic_millis())') &&
+    nativeSource.includes('.current(job, monotonic_millis())') &&
     nativeSource.includes('main.minimize()') &&
     !nativeSource.includes('hide_main_window(&app_for_main_thread)') &&
     nativeSource.includes('suppress_main_auto_minimize_for_explicit_show()') &&
@@ -119,7 +121,7 @@ assert(
 assert(
   cargoToml.includes('window-vibrancy = "0.6"') &&
     cargoToml.includes('window-vibrancy-win = { package = "window-vibrancy", version = "0.7" }') &&
-    nativeSource.includes('use window_vibrancy_win::{apply_acrylic, apply_mica};'),
+    materialSource.includes('window-vibrancy 0.7.1'),
   'macOS must align with Tauri 0.6 while Windows retains KIMI window-vibrancy 0.7',
 );
 assert(

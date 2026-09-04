@@ -11,6 +11,17 @@ pub struct AutostartStatus {
 
 const APP_NAME: &str = crate::product::PRODUCT_NAME;
 
+fn startup_approved_enabled(binary: bool, bytes: &[u8]) -> Result<bool, String> {
+    if !binary || bytes.len() != 12 || bytes[1..4] != [0, 0, 0] {
+        return Err("任务管理器启动状态格式未知，保留现有启动项".into());
+    }
+    match bytes[0] {
+        2 if bytes[4..].iter().all(|byte| *byte == 0) => Ok(true),
+        3 => Ok(false),
+        _ => Err("任务管理器启动状态编码未知，保留现有启动项".into()),
+    }
+}
+
 pub fn classify_windows_run_value(raw_value: Option<&str>, expected_path: &str) -> AutostartStatus {
     let registered_path = raw_value.and_then(extract_windows_run_exe_path);
     let stale = registered_path
@@ -69,23 +80,26 @@ fn is_self_contained_windows_exe(path: &str) -> bool {
 fn decide_windows_autostart_repair(
     raw_value: Option<&str>,
     current_exe: &str,
+    current_is_dev: bool,
 ) -> WindowsAutostartRepair {
     let Some(raw_value) = raw_value else {
         return WindowsAutostartRepair::Preserve;
     };
     let registered_path = extract_windows_run_exe_path(raw_value);
     let current_is_self_contained = is_self_contained_windows_exe(current_exe);
-    let registered_is_self_contained = registered_path
-        .as_deref()
-        .map(is_self_contained_windows_exe)
-        .unwrap_or(false);
-
-    if !current_is_self_contained {
-        return if registered_is_self_contained {
-            WindowsAutostartRepair::Preserve
-        } else {
+    if current_is_dev {
+        return if registered_path
+            .as_deref()
+            .is_some_and(|path| paths_match(path, current_exe))
+        {
             WindowsAutostartRepair::DeleteInvalid
+        } else {
+            WindowsAutostartRepair::Preserve
         };
+    }
+    // An embedded debug build is runnable but must not take over an installed app.
+    if !current_is_self_contained {
+        return WindowsAutostartRepair::Preserve;
     }
 
     match registered_path {
@@ -134,19 +148,17 @@ mod platform {
         let expected_path = current_exe_path()?;
         let raw_value = read_run_value()?;
         let mut status = classify_windows_run_value(raw_value.as_deref(), &expected_path);
-        if !is_self_contained_windows_exe(&expected_path) {
-            let registered_is_self_contained = status
-                .registered_path
-                .as_deref()
-                .map(is_self_contained_windows_exe)
-                .unwrap_or(false);
-            status.enabled = raw_value.is_some() && registered_is_self_contained;
-            status.stale = raw_value.is_some() && !registered_is_self_contained;
-            if registered_is_self_contained {
-                status.expected_path = status.registered_path.clone().unwrap_or(expected_path);
-            }
+        let usable = status.registered_path.as_deref().is_some_and(|path| {
+            is_self_contained_windows_exe(path)
+                && std::path::Path::new(path).is_file()
+                && !(tauri::is_dev() && paths_match(path, &expected_path))
+        });
+        status.enabled = raw_value.is_some() && usable;
+        status.stale = raw_value.is_some() && !usable;
+        if usable {
+            status.expected_path = status.registered_path.clone().unwrap_or(expected_path);
         }
-        if status.enabled && !task_manager_enabled().unwrap_or(true) {
+        if status.enabled && !task_manager_enabled()? {
             status.enabled = false;
         }
         Ok(status)
@@ -155,7 +167,7 @@ mod platform {
     pub fn set_autostart_enabled(enabled: bool) -> Result<AutostartStatus, String> {
         if enabled {
             let expected_path = current_exe_path()?;
-            if !is_self_contained_windows_exe(&expected_path) {
+            if tauri::is_dev() || !is_self_contained_windows_exe(&expected_path) {
                 return Err("开发调试版依赖本地前端服务，不能注册为 Windows 开机启动项".to_string());
             }
             write_run_value(&expected_path)?;
@@ -170,11 +182,19 @@ mod platform {
         let expected_path = current_exe_path()?;
         let raw_value = read_run_value()?;
         let status = classify_windows_run_value(raw_value.as_deref(), &expected_path);
-        match decide_windows_autostart_repair(raw_value.as_deref(), &expected_path) {
+        // Running an embedded preview/portable build is not a request to replace
+        // a working installed app's autostart ownership. Repair missing targets only.
+        if status.registered_path.as_deref().is_some_and(|path| {
+            !paths_match(path, &expected_path)
+                && is_self_contained_windows_exe(path)
+                && std::path::Path::new(path).is_file()
+        }) {
+            return Ok(());
+        }
+        match decide_windows_autostart_repair(raw_value.as_deref(), &expected_path, tauri::is_dev())
+        {
             WindowsAutostartRepair::Preserve => {}
-            WindowsAutostartRepair::ReplaceWithCurrent
-                if task_manager_enabled().unwrap_or(true) =>
-            {
+            WindowsAutostartRepair::ReplaceWithCurrent if task_manager_enabled()? => {
                 write_run_value(&expected_path)?;
                 write_startup_approved_enabled()?;
                 log::info!(
@@ -254,10 +274,7 @@ mod platform {
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(true),
             Err(err) => return Err(format!("读取任务管理器启动项失败: {err}")),
         };
-        if raw.bytes.len() < 8 {
-            return Ok(true);
-        }
-        Ok(raw.bytes.iter().rev().take(8).all(|value| *value == 0))
+        startup_approved_enabled(raw.vtype == REG_BINARY, &raw.bytes)
     }
 }
 
@@ -294,16 +311,36 @@ mod tests {
     use super::*;
 
     #[test]
+    fn startup_approved_unknown_records_fail_closed() {
+        let mut bytes = [0; 12];
+        bytes[0] = 2;
+        assert_eq!(startup_approved_enabled(true, &bytes), Ok(true));
+        assert!(startup_approved_enabled(false, &bytes).is_err());
+        for length in 0..12 {
+            assert!(startup_approved_enabled(true, &bytes[..length]).is_err());
+        }
+        bytes[4] = 1;
+        assert!(startup_approved_enabled(true, &bytes).is_err());
+        bytes[0] = 3;
+        assert_eq!(startup_approved_enabled(true, &bytes), Ok(false));
+        bytes[0] = 6;
+        assert!(startup_approved_enabled(true, &bytes).is_err());
+        bytes[0] = 2;
+        bytes[1] = 1;
+        assert!(startup_approved_enabled(true, &bytes).is_err());
+    }
+
+    #[test]
     fn debug_build_cannot_replace_a_self_contained_autostart_target() {
         let installed = r#""C:\Program Files\Whisper Input\whisper-input.exe""#;
         let debug = r"C:\Repo\src-tauri\target\debug\whisper-input.exe";
 
         assert_eq!(
-            decide_windows_autostart_repair(Some(installed), debug),
+            decide_windows_autostart_repair(Some(installed), debug, true),
             WindowsAutostartRepair::Preserve
         );
         assert_eq!(
-            decide_windows_autostart_repair(Some(&windows_run_command(debug)), debug),
+            decide_windows_autostart_repair(Some(&windows_run_command(debug)), debug, true),
             WindowsAutostartRepair::DeleteInvalid
         );
     }
@@ -314,7 +351,7 @@ mod tests {
         let current = r"C:\Users\User\AppData\Local\Programs\Whisper Input\whisper-input.exe";
 
         assert_eq!(
-            decide_windows_autostart_repair(Some(old), current),
+            decide_windows_autostart_repair(Some(old), current, false),
             WindowsAutostartRepair::ReplaceWithCurrent
         );
     }
@@ -353,5 +390,39 @@ mod tests {
         assert!(!state.enabled);
         assert!(!state.stale);
         assert_eq!(state.registered_path, None);
+    }
+
+    #[test]
+    fn dev_protocol_not_path_determines_autostart_safety() {
+        let installed = r#""C:\Apps\Whisper Input\whisper-input.exe""#;
+        for dev in [
+            r"D:\custom-target\release\whisper-input.exe",
+            r"C:\Preview\whisper-input.exe",
+        ] {
+            assert_eq!(
+                decide_windows_autostart_repair(Some(installed), dev, true),
+                WindowsAutostartRepair::Preserve
+            );
+            assert_eq!(
+                decide_windows_autostart_repair(Some("invalid unrelated entry"), dev, true),
+                WindowsAutostartRepair::Preserve
+            );
+            assert_eq!(
+                decide_windows_autostart_repair(None, dev, true),
+                WindowsAutostartRepair::Preserve
+            );
+            assert_eq!(
+                decide_windows_autostart_repair(Some(&windows_run_command(dev)), dev, true),
+                WindowsAutostartRepair::DeleteInvalid
+            );
+        }
+        assert_eq!(
+            decide_windows_autostart_repair(
+                Some(installed),
+                r"C:\repo\target\debug\whisper-input.exe",
+                false
+            ),
+            WindowsAutostartRepair::Preserve
+        );
     }
 }

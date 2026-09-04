@@ -49,25 +49,8 @@ function MainApp() {
   const [initialSettingsOpen, setInitialSettingsOpen] = useState(false);
   const [initialSettingsSection, setInitialSettingsSection] = useState<SettingsSectionId | undefined>();
 
-  useEffect(() => {
-    if (!isTauri) return;
-    if (os === 'win' && gate === 'checking') return;
-    let cancelled = false;
-    requestAnimationFrame(() => {
-      if (cancelled) return;
-      import('@tauri-apps/api/window')
-        .then(async ({ getCurrentWindow }) => {
-          const currentWindow = getCurrentWindow();
-          if (!(await currentWindow.isVisible())) {
-            await currentWindow.show();
-          }
-        })
-        .catch(error => console.warn('[startup] show main window failed', error));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [gate, os]);
+  // Rust owns initial visibility (including startMinimized), restore and focus.
+  // A late permission response must never reopen a tray-hidden window.
 
   useEffect(() => {
     if (!isTauri) return;

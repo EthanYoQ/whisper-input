@@ -641,6 +641,19 @@
   line-height: 1.5;
 }
 
+.wi-settings-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.wi-settings-tools {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
 .wi-settings-tabs {
   display: flex;
   justify-content: space-between;
@@ -652,7 +665,7 @@
   min-width: 0;
   border: 0;
   border-radius: 12px;
-  overflow: hidden;
+  overflow-x: auto;
   background: rgb(255 255 255 / calc(0.22 * var(--lg-alpha-scale, 1)));
   box-shadow: var(--wi-inset-ring-soft), 0 10px 26px -24px rgba(15, 23, 42, 0.32);
 }
@@ -1506,17 +1519,15 @@
 }
 
 .wi-week-empty {
-  position: absolute;
-  inset: 0;
+  height: 100%;
+  min-height: 122px;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1;
-  pointer-events: none;
   color: var(--wi-muted);
   font-size: 14px;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.72);
+  background: transparent;
 }
 
 .wi-recent-list {
@@ -3276,7 +3287,6 @@
 
   .wi-settings-tabs {
     max-width: 100%;
-    margin-top: 54px;
     overflow-x: auto;
     justify-content: flex-start;
   }

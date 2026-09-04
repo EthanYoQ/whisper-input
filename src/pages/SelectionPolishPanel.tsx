@@ -9,6 +9,7 @@ import {
   isTauri,
 } from '../lib/ipc';
 import type { SelectionPolishStatePayload } from '../lib/types';
+import { asyncSubscription } from '../lib/asyncSubscription';
 
 export function SelectionPolishPanel() {
   const { t } = useTranslation();
@@ -20,9 +21,9 @@ export function SelectionPolishPanel() {
 
   useEffect(() => {
     if (!isTauri) return;
-    let unlisten: (() => void) | undefined;
-    void import('@tauri-apps/api/event').then(async ({ listen }) => {
-      unlisten = await listen<SelectionPolishStatePayload>(
+    const stop = asyncSubscription(async () => {
+      const { listen } = await import('@tauri-apps/api/event');
+      return listen<SelectionPolishStatePayload>(
         'selection-polish:state',
         event => {
           const payload = event.payload;
@@ -33,13 +34,18 @@ export function SelectionPolishPanel() {
           setBusy(false);
         },
       );
+    }, error => {
+      console.warn('[selection-polish] listener failed', error);
+      setStatus('error');
+      setErrorCode('listenerUnavailable');
+      setBusy(false);
     });
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') void cancelSelectionPolish();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => {
-      unlisten?.();
+      stop();
       window.removeEventListener('keydown', onKeyDown);
     };
   }, []);
@@ -158,7 +164,7 @@ const textareaStyle: React.CSSProperties = {
   padding: 12,
   borderRadius: 8,
   border: '0.5px solid var(--ol-line-strong)',
-  background: 'var(--ol-surface-2)',
+  background: 'transparent',
   color: 'var(--ol-ink)',
   font: 'inherit',
   lineHeight: 1.6,

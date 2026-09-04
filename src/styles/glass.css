@@ -15,9 +15,9 @@
  * - 只有窗口内部浮层（如下拉菜单浮在页面内容上）才允许用
  *   backdrop-filter（采样窗口内 DOM),见 --lg-pop-*。
  *
- * 整体透明度：填充类 token 的 alpha 一律经 calc(α × var(--lg-alpha-scale, 1))
+ * 整体透明度：主窗口填充 token 的 alpha 经 calc(α × var(--lg-alpha-scale, 1))
  * 缩放（设置页「玻璃面板不透明度」滑杆,见 lib/glassAlpha.ts)。rim 高光、
- * 描边、墨色不参与缩放 —— 调低填充时玻璃更通透,但边缘识别与文字对比不变。
+ * 描边、墨色和无原生模糊的文字浮窗不参与缩放。
  */
 
 :root {
@@ -41,10 +41,10 @@
   --lg-sidebar-top: rgb(255 255 255 / calc(0.26 * var(--lg-alpha-scale, 1)));
   --lg-sidebar-bottom: rgb(255 255 255 / calc(0.16 * var(--lg-alpha-scale, 1)));
 
-  /* KIMI d724b2e 正文父层。Overview 的内容直接落在这张 sheet 上，
-     因此父层保留 60%/52% 的材质强度，子分组不得再叠白板。 */
-  --lg-sheet-top: rgb(253 254 255 / calc(0.60 * var(--lg-alpha-scale, 1)));
-  --lg-sheet-bottom: rgb(244 247 252 / calc(0.52 * var(--lg-alpha-scale, 1)));
+  /* Light 正文与侧栏共用同一材质，避免大片正文读成白板。
+     子分组保持透明；Dark 在下方独立覆写，不受影响。 */
+  --lg-sheet-top: var(--lg-sidebar-top);
+  --lg-sheet-bottom: var(--lg-sidebar-bottom);
   --lg-sheet-ring: rgba(15, 23, 42, 0.05);
   --lg-sheet-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
   --lg-sheet-radius: 16px;
@@ -69,8 +69,10 @@
   --lg-pill-chip-dim: rgb(255 255 255 / calc(0.28 * var(--lg-alpha-scale, 1)));
 
   /* 浮窗(QA / 划词润色,CleanShot X 档):可读优先的奶白磨砂。 */
-  --lg-float-top: rgb(255 255 255 / calc(0.72 * var(--lg-alpha-scale, 1)));
-  --lg-float-bottom: rgb(246 248 252 / calc(0.60 * var(--lg-alpha-scale, 1)));
+  /* Text floats have no native backdrop. Keep one readable surface, independent
+     of the main window's glass slider; never compound inner glass panels. */
+  --lg-float-top: rgb(255 255 255 / 0.94);
+  --lg-float-bottom: rgb(246 248 252 / 0.90);
   --lg-float-border: rgba(255, 255, 255, 0.55);
   --lg-float-shadow: 0 18px 50px rgba(15, 23, 42, 0.20), 0 3px 10px rgba(15, 23, 42, 0.08);
 
@@ -123,8 +125,8 @@
   --lg-pill-chip: rgb(255 255 255 / calc(0.14 * var(--lg-alpha-scale, 1)));
   --lg-pill-chip-dim: rgb(255 255 255 / calc(0.07 * var(--lg-alpha-scale, 1)));
 
-  --lg-float-top: rgb(30 32 40 / calc(0.78 * var(--lg-alpha-scale, 1)));
-  --lg-float-bottom: rgb(26 28 35 / calc(0.64 * var(--lg-alpha-scale, 1)));
+  --lg-float-top: rgb(30 32 40 / 0.94);
+  --lg-float-bottom: rgb(26 28 35 / 0.90);
   --lg-float-border: rgba(255, 255, 255, 0.10);
   --lg-float-shadow: 0 22px 56px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
 
@@ -137,6 +139,17 @@
     rgb(255 255 255 / calc(0.04 * var(--lg-alpha-scale, 1))));
   --ol-card-bg: var(--lg-card-bg);
   --wi-panel: rgb(255 255 255 / calc(0.05 * var(--lg-alpha-scale, 1)));
+}
+
+/* Only an explicit native failure enables this opaque backing. Unknown status
+   must not destroy the working KIMI material. Forced colors takes precedence. */
+@media (forced-colors: none) {
+  html[data-window-kind='main'][data-native-material='fallback'] {
+    background: #edf1f7;
+  }
+  html[data-window-kind='main'][data-native-material='fallback'][data-theme='dark'] {
+    background: #202228;
+  }
 }
 
 @media (forced-colors: active) {

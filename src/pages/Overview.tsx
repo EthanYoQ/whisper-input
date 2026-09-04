@@ -287,7 +287,7 @@ function Metric({ iconName, label, value, trend, accent, tone = 'blue' }: Metric
   );
 }
 
-function WeekChart({ days }: { days: WeeklyUsageDay[] }) {
+export function WeekChart({ days }: { days: WeeklyUsageDay[] }) {
   const { t } = useTranslation();
   const maxChars = Math.max(1, ...days.map(day => day.chars));
   const axisMax = niceAxisMax(maxChars);
@@ -313,9 +313,11 @@ function WeekChart({ days }: { days: WeeklyUsageDay[] }) {
     ? `${linePath} L ${points[points.length - 1].x} ${chartHeight - padY} L ${points[0].x} ${chartHeight - padY} Z`
     : '';
 
+  if (!hasData) {
+    return <div className="wi-week-chart"><div className="wi-week-empty">{t('overview.weekEmpty')}</div></div>;
+  }
   return (
     <div className="wi-week-chart">
-      {!hasData && <div className="wi-week-empty">{t('overview.weekEmpty')}</div>}
       <div className="wi-week-line-chart" aria-label={t('overview.weekTitle')}>
         <div className="wi-week-y-axis" aria-hidden>
           <span>{axisMax.toLocaleString()}</span>

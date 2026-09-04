@@ -2,7 +2,9 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { App } from "./App";
 import i18n from "./i18n"; // 副作用：触发 i18next init
-import { applyThemePreference, readThemePreference } from "./lib/themePreference";
+import { applyThemePreference, readThemePreference, startThemeSync } from "./lib/themePreference";
+import { asyncSubscription } from "./lib/asyncSubscription";
+import { initializeNativeMaterial } from "./lib/nativeMaterial";
 import { applyGlassAlpha, readGlassAlpha, startGlassAlphaSync } from "./lib/glassAlpha";
 import "./styles/tokens.css";
 import "./styles/global.css";
@@ -14,15 +16,19 @@ const windowKind = params.get("window");
 const isCapsule = windowKind === "capsule";
 const isQa = windowKind === "qa";
 const isSelectionPolish = windowKind === "selection-polish";
+document.documentElement.dataset.windowKind = windowKind ?? 'main';
+void initializeNativeMaterial();
 
 // 首帧前落实 data-theme:glass/replica 两套 token 都按它取色,
 // 晚了会闪一帧错误主题。
 applyThemePreference(readThemePreference());
 // 同帧落实玻璃透明度:填充类 token 全部经 --lg-alpha-scale 取 alpha。
 applyGlassAlpha(readGlassAlpha());
-void startGlassAlphaSync().catch(error => {
+const stopThemeSync = asyncSubscription(startThemeSync, error => console.warn('[theme]', error));
+const stopGlassSync = asyncSubscription(startGlassAlphaSync, error => {
   console.warn('[glass-alpha] cross-window listener failed', error);
 });
+import.meta.hot?.dispose(() => { stopThemeSync(); stopGlassSync(); });
 
 // 纯浏览器 dev 预览:OS 合成器(Mica/Acrylic)不存在,窗口级玻璃
 // token 按设计不含 backdrop-filter,透明 tint 落在浏览器默认白画布上

@@ -17,7 +17,7 @@ import i18n, { setLocalePreference } from '../i18n';
 import { APP_TABS } from '../lib/appNavigation';
 import { PRODUCT_NAME, PRODUCT_NAME_ZH } from '../lib/product';
 import { PROVIDER_SETUP_PROMPT_DEFERRED_KEY, shouldShowProviderSetupPrompt } from '../lib/providerSetup';
-import { readThemePreference, setThemePreference, type ThemePreference } from '../lib/themePreference';
+import { readThemePreference, setThemePreference, subscribeThemePreference, type ThemePreference } from '../lib/themePreference';
 import { type SettingsSectionId } from '../pages/Settings';
 import { useAppState, type AppTab } from '../state/useAppState';
 
@@ -83,6 +83,7 @@ function FloatingShellBody({
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSectionId | undefined>(initialSettingsSection);
   const [startupPrompt, setStartupPrompt] = useState<'provider' | 'hotkey' | null>(null);
   const [theme, setTheme] = useState<ThemePreference>(() => readThemePreference());
+  useEffect(() => subscribeThemePreference(setTheme), []);
 
   const [displayTab, setDisplayTab] = useState<AppTab>(currentTab);
   const [tabPhase, setTabPhase] = useState<'idle' | 'exiting'>('idle');
@@ -188,6 +189,9 @@ function FloatingShellBody({
     setTheme(nextTheme);
   };
 
+  const commandBar = <CommandBar onOpenHelp={openHelp} onToggleTheme={switchTheme}
+    onToggleLocale={switchLocale} theme={theme} />;
+
   return (
     <>
       <AppShell
@@ -195,14 +199,7 @@ function FloatingShellBody({
         sidebar={
           <Sidebar items={sidebarItems} />
         }
-        commandBar={
-          <CommandBar
-            onOpenHelp={openHelp}
-            onToggleTheme={switchTheme}
-            onToggleLocale={switchLocale}
-            theme={theme}
-          />
-        }
+        commandBar={displayTab === 'settings' ? undefined : commandBar}
         overlays={
           startupPrompt === 'provider' ? (
             <ProviderSetupPrompt onLater={deferStartupPrompt} onOpenSettings={openStartupPromptSettings} />
@@ -215,7 +212,7 @@ function FloatingShellBody({
           {displayTab === 'overview' ? (
             <Overview onOpenHistory={() => setCurrentTab('history')} onOpenSettings={() => openSettingsPage('models')} />
           ) : displayTab === 'settings' ? (
-            <Settings embedded initialSection={settingsInitialSection ?? 'models'} />
+            <Settings embedded initialSection={settingsInitialSection ?? 'models'} headerTools={commandBar} />
           ) : (
             <Page />
           )}

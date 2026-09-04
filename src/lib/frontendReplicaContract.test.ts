@@ -27,6 +27,7 @@ const overviewSource = readFileSync(new URL('../pages/Overview.tsx', import.meta
 const vocabSource = readFileSync(new URL('../pages/Vocab.tsx', import.meta.url), 'utf8');
 const styleSource = readFileSync(new URL('../pages/Style.tsx', import.meta.url), 'utf8');
 const windowChromeSource = readFileSync(new URL('../components/WindowChrome.tsx', import.meta.url), 'utf8');
+const nativeAppSource = readFileSync(new URL('../../src-tauri/src/lib.rs', import.meta.url), 'utf8');
 const tauriConfig = JSON.parse(
   readFileSync(new URL('../../src-tauri/tauri.conf.json', import.meta.url), 'utf8'),
 ) as { app: { windows: Array<{ label: string; decorations?: boolean; shadow?: boolean }> } };
@@ -401,9 +402,11 @@ assert(
 );
 
 assert(
-  windowChromeSource.includes('await currentWindow.hide();') &&
-    !windowChromeSource.includes('await currentWindow.close();'),
-  'Windows 自绘关闭按钮必须隐藏主窗口到托盘，不能直接 close 退出应用',
+  windowChromeSource.includes('await currentWindow.close();') &&
+    nativeAppSource.includes('api.prevent_close();') &&
+    nativeAppSource.includes('hide_main_window(') &&
+    nativeAppSource.includes('MAIN_FOCUS_POLICY.lock().hide();'),
+  '关闭按钮必须交给 Rust 拦截，取消延迟最小化并隐藏到托盘，而非退出应用',
 );
 
 assert(

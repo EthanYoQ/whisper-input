@@ -12,6 +12,7 @@
 
 mod asr;
 mod audio_mute;
+pub mod capsule_window;
 mod autostart;
 mod combo_hotkey;
 mod commands;
@@ -19,10 +20,13 @@ mod coordinator;
 mod coordinator_state;
 mod correction;
 mod diagnostics;
+#[cfg(any(target_os = "windows", test))]
+mod focus_policy;
 mod global_hotkey_runtime;
 mod hotkey;
 mod insertion;
 mod llm_gemini;
+mod native_material;
 mod permissions;
 mod persistence;
 mod polish;
@@ -44,8 +48,6 @@ mod windows_ime_profile;
 mod windows_ime_protocol;
 mod windows_ime_session;
 
-#[cfg(target_os = "windows")]
-use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "macos")]
 use std::sync::mpsc;
@@ -59,7 +61,8 @@ const LOG_ROTATE_LIMIT_BYTES: u64 = 10 * 1024 * 1024;
 static QA_WINDOW_POSITIONED: AtomicBool = AtomicBool::new(false);
 static TRAY_MICROPHONE_WATCHER_STOPPING: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "windows")]
-static MAIN_AUTO_MINIMIZE_SUPPRESS_UNTIL_MS: AtomicU64 = AtomicU64::new(0);
+static MAIN_FOCUS_POLICY: parking_lot::Mutex<focus_policy::FocusPolicy> =
+    parking_lot::Mutex::new(focus_policy::FocusPolicy::new());
 use tauri::menu::{
     CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder, Submenu, SubmenuBuilder,
 };
@@ -108,6 +111,7 @@ pub fn run() {
             None,
         ))
         .manage(coordinator.clone())
+        .manage(native_material::MaterialState::default())
         .manage(diagnostic_store.clone())
         .manage(local_asr_download_manager.clone())
         .manage(foundry_local_runtime.clone())
@@ -173,33 +177,33 @@ pub fn run() {
                     if let Err(e) = main.set_decorations(true) {
                         log::warn!("[main] enable native decorations failed: {e}");
                     }
-                    if let Err(e) = apply_vibrancy(
+                    let result = apply_vibrancy(
                         &main,
                         NSVisualEffectMaterial::HudWindow,
                         Some(NSVisualEffectState::Active),
                         Some(20.0),
-                    ) {
-                        log::warn!("[main] vibrancy unavailable: {e}");
-                    }
+                    );
+                    native_material::complete(
+                        &main,
+                        if result.is_ok() {
+                            native_material::Material::Vibrancy
+                        } else {
+                            native_material::Material::Fallback
+                        },
+                    );
                 }
                 #[cfg(target_os = "windows")]
                 {
-                    use window_vibrancy_win::{apply_acrylic, apply_mica};
                     // The window starts hidden so Windows native chrome can be disabled before
                     // the first show; doing this after the native frame is visible is unreliable.
                     if let Err(e) = main.set_decorations(false) {
                         log::warn!("[main] disable native decorations failed: {e}");
                     }
-                    if let Err(acrylic_error) = apply_acrylic(&main, None) {
-                        log::info!(
-                            "[main] acrylic unavailable, trying Mica fallback: {acrylic_error}"
-                        );
-                        if let Err(mica_error) = apply_mica(&main, None) {
-                            log::warn!("[main] native glass unavailable: {mica_error}");
-                        }
-                    }
+                    native_material::complete(&main, native_material::apply(&main));
                     apply_windows_rounded_frame(&main);
                 }
+                #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+                native_material::complete(&main, native_material::Material::Fallback);
                 // 静默启动开关：prefs.start_minimized = true → 不弹主窗口，
                 // 用户从菜单栏 / 托盘点击访问。开机自启时尤其有用，避免每次
                 // 登录都被主窗口打扰。OPENLESS_SHOW_MAIN_ON_START=1 仍保留
@@ -281,6 +285,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            native_material::get_native_material_status,
             commands::get_settings,
             commands::set_settings,
             commands::get_update_channel,
@@ -412,14 +417,18 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             RunEvent::Reopen { .. } => show_main_window(app),
             RunEvent::WindowEvent { label, event, .. } => {
+                // A same-process floating window may own focus after main loses it.
+                // Recheck when that window blurs; main will not receive a second blur.
+                #[cfg(target_os = "windows")]
+                if focus_policy::tracks_focus_loss(&label)
+                    && matches!(event, tauri::WindowEvent::Focused(false))
+                {
+                    schedule_main_minimize_after_focus_loss(app);
+                }
                 if label == "main" {
                     if let tauri::WindowEvent::CloseRequested { ref api, .. } = event {
                         api.prevent_close();
                         hide_main_window(app);
-                    }
-                    #[cfg(target_os = "windows")]
-                    if matches!(event, tauri::WindowEvent::Focused(false)) {
-                        schedule_main_minimize_after_focus_loss(app);
                     }
                     #[cfg(target_os = "windows")]
                     if matches!(
@@ -432,6 +441,7 @@ pub fn run() {
                             apply_windows_rounded_frame(&main);
                         }
                         if matches!(event, tauri::WindowEvent::Focused(true)) {
+                            MAIN_FOCUS_POLICY.lock().focused();
                             schedule_windows_rounded_frame(app);
                         }
                     }
@@ -716,16 +726,12 @@ fn suppress_main_auto_minimize_for_explicit_show() {
     // Selecting a tray item briefly gives Explorer the foreground even though the
     // command is already restoring this window. Keep that transient notification
     // from undoing the user's explicit request to show the app.
-    const EXPLICIT_SHOW_GRACE_MS: u64 = 750;
-    MAIN_AUTO_MINIMIZE_SUPPRESS_UNTIL_MS.store(
-        monotonic_millis().saturating_add(EXPLICIT_SHOW_GRACE_MS),
-        Ordering::Relaxed,
-    );
+    MAIN_FOCUS_POLICY.lock().show(monotonic_millis());
 }
 
 #[cfg(target_os = "windows")]
 fn main_auto_minimize_is_suppressed() -> bool {
-    monotonic_millis() < MAIN_AUTO_MINIMIZE_SUPPRESS_UNTIL_MS.load(Ordering::Relaxed)
+    MAIN_FOCUS_POLICY.lock().suppressed(monotonic_millis())
 }
 
 #[cfg(target_os = "windows")]
@@ -746,13 +752,21 @@ fn should_minimize_main_after_focus_loss(
 
 #[cfg(target_os = "windows")]
 fn schedule_main_minimize_after_focus_loss<R: Runtime>(app: &AppHandle<R>) {
+    let Some(job) = MAIN_FOCUS_POLICY.lock().lost_focus(monotonic_millis()) else {
+        return;
+    };
     let app = app.clone();
     std::thread::spawn(move || {
         // Focus notifications can arrive midway through a tray/single-instance restore.
         // Let that handoff settle, then make the visibility decision on Tauri's main thread.
-        std::thread::sleep(Duration::from_millis(75));
+        std::thread::sleep(Duration::from_millis(
+            job.due.saturating_sub(monotonic_millis()),
+        ));
         let app_for_main_thread = app.clone();
         if let Err(error) = app.run_on_main_thread(move || {
+            if !MAIN_FOCUS_POLICY.lock().current(job, monotonic_millis()) {
+                return;
+            }
             if let Some(main) = app_for_main_thread.get_webview_window("main") {
                 if should_minimize_main_for_current_foreground(&main) {
                     log::info!(
@@ -1063,6 +1077,11 @@ pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
         }
         #[cfg(target_os = "windows")]
         {
+            // A repeated show of the already focused window need not emit a
+            // new Focused(true). Arm only after confirming real native focus.
+            if w.is_focused().unwrap_or(false) {
+                MAIN_FOCUS_POLICY.lock().focused();
+            }
             apply_windows_rounded_frame(&w);
             schedule_windows_rounded_frame(app);
         }
@@ -1080,7 +1099,9 @@ pub(crate) fn request_microphone_from_foreground<R: Runtime>(
 
 fn hide_main_window<R: Runtime>(app: &AppHandle<R>) {
     #[cfg(target_os = "windows")]
-    MAIN_AUTO_MINIMIZE_SUPPRESS_UNTIL_MS.store(0, Ordering::Relaxed);
+    {
+        MAIN_FOCUS_POLICY.lock().hide();
+    }
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.hide();
     }
