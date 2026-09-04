@@ -144,8 +144,9 @@ pub fn run() {
                 log::info!("[qa] qa 窗口未在 tauri.conf.json 中声明，前端 agent 会补上");
             }
 
-            // 主窗口磨砂：macOS 用 NSVisualEffectView；Windows 11 优先 Mica，
-            // Windows 10 才降级到 Acrylic。成功后才允许前端使用透明根背景。
+            // 主窗口磨砂：macOS 用 NSVisualEffectView；Windows 优先 Acrylic，
+            // 保留 KIMI 视觉基线的明显模糊与壁纸色相，失败时才降级到 Mica。
+            // 成功后才允许前端使用透明根背景。
             // 没这一层的话 transparent: true 让窗口透明 → 背后只是空，不是磨砂。
             //
             // decorations 留给运行时分平台决定：macOS 默认 true 用系统红黄绿；
@@ -185,14 +186,14 @@ pub fn run() {
                     if let Err(e) = main.set_decorations(false) {
                         log::warn!("[main] disable native decorations failed: {e}");
                     }
-                    let native_glass_enabled = match apply_mica(&main, None) {
+                    let native_glass_enabled = match apply_acrylic(&main, None) {
                         Ok(()) => true,
-                        Err(mica_error) => {
-                            log::info!("[main] mica unavailable, trying Windows 10 acrylic fallback: {mica_error}");
-                            match apply_acrylic(&main, None) {
+                        Err(acrylic_error) => {
+                            log::info!("[main] acrylic unavailable, trying Mica fallback: {acrylic_error}");
+                            match apply_mica(&main, None) {
                                 Ok(()) => true,
-                                Err(acrylic_error) => {
-                                    log::warn!("[main] native glass failed; using solid fallback: {acrylic_error}");
+                                Err(mica_error) => {
+                                    log::warn!("[main] native glass failed; using solid fallback: {mica_error}");
                                     false
                                 }
                             }

@@ -151,8 +151,9 @@
   box-shadow: var(--wi-inset-ring-soft), 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.wi-icon-btn {
-  min-width: 58px;
+.wi-commandbar .wi-btn.wi-icon-btn {
+  width: 38px;
+  min-width: 38px;
   padding: 0;
 }
 

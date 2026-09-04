@@ -7,6 +7,7 @@ function assert(condition: boolean, message: string): void {
 
 const qaSource = readFileSync(new URL('../pages/QaPanel.tsx', import.meta.url), 'utf8');
 const selectionSource = readFileSync(new URL('../pages/SelectionPolishPanel.tsx', import.meta.url), 'utf8');
+const shellSource = readFileSync(new URL('../components/FloatingShell.tsx', import.meta.url), 'utf8');
 const mainSource = readFileSync(new URL('../main.tsx', import.meta.url), 'utf8');
 const alphaSource = readFileSync(new URL('./glassAlpha.ts', import.meta.url), 'utf8');
 const glassCss = readFileSync(new URL('../styles/glass.css', import.meta.url), 'utf8');
@@ -42,10 +43,17 @@ assert(
 );
 
 assert(
-  nativeSource.includes('apply_mica(&main, None)') &&
-    nativeSource.includes('apply_acrylic(&main, None)') &&
+  nativeSource.includes('apply_acrylic(&main, None)') &&
+    nativeSource.includes('apply_mica(&main, None)') &&
+    nativeSource.indexOf('apply_acrylic(&main, None)') < nativeSource.indexOf('apply_mica(&main, None)') &&
     nativeSource.includes('mark_native_glass_enabled(&main)'),
-  'Windows must prefer Mica, retain an Acrylic fallback, and expose native-glass success',
+  'Windows must preserve the approved Acrylic visual and use Mica only as its fallback',
+);
+assert(
+  shellSource.includes('setThemePreference(nextTheme)') &&
+    shellSource.includes("name={theme === 'dark' ? 'sun' : 'moon'}") &&
+    shellSource.includes("t(theme === 'dark' ? 'shell.commandBar.themeLight' : 'shell.commandBar.themeDark')"),
+  'the command bar must expose an accessible persisted light/dark toggle beside language',
 );
 assert(
   !nativeSource.includes('DwmEnableBlurBehindWindow'),
