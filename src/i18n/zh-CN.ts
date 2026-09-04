@@ -408,6 +408,7 @@ export const zhCN = {
       language: '语言',
       output: '输出与语言',
       advanced: '高级',
+      appearance: '外观',
       about: '关于',
     },
     recording: {
@@ -694,6 +695,13 @@ export const zhCN = {
       outputZhTw: '繁體中文',
       outputEn: 'English',
       restartHint: '部分原生菜单（系统托盘等）可能需要重启 App 才会切换。',
+    },
+    appearance: {
+      title: '外观',
+      desc: '玻璃面板的通透程度，即时生效并记住。',
+      glassAlphaLabel: '玻璃面板不透明度',
+      glassAlphaDesc: '数值越低越通透，桌面壁纸透入越多；边缘高光与文字对比不受影响。',
+      glassAlphaReset: '恢复默认',
     },
     about: {
       title: '关于',

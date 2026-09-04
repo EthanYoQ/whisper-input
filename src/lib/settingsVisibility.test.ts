@@ -27,8 +27,8 @@ function assert(condition: boolean, message: string) {
 const standardLlmIds = visibleStandardLlmProviderIds();
 
 assert(
-  STANDARD_SETTINGS_SECTION_IDS.join(',') === 'models,recording,privacy,output,about',
-  `standard settings sections should be models,recording,privacy,output,about, got ${STANDARD_SETTINGS_SECTION_IDS.join(',')}`,
+  STANDARD_SETTINGS_SECTION_IDS.join(',') === 'models,recording,privacy,output,appearance,about',
+  `standard settings sections should be models,recording,privacy,output,appearance,about, got ${STANDARD_SETTINGS_SECTION_IDS.join(',')}`,
 );
 assert(
   PRODUCT_FEATURES.showLocalAsrExperiments === false,

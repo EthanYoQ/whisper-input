@@ -66,12 +66,14 @@ export function WindowChrome({
         display: 'flex',
         flexDirection: 'column',
         border: 'none',
-        background: 'var(--wi-window)',
-        backdropFilter: 'blur(var(--ol-glass-blur-strong))',
-        WebkitBackdropFilter: 'blur(var(--ol-glass-blur-strong))',
+        // 透明窗口里这一层必须是透明的:Mica/Vibrancy 的模糊由 OS 合成在
+        // webview 之下,容器再涂不透明底色就把玻璃整个盖掉了。Linux 没有
+        // OS 模糊,退回不透明底色。根层级的 backdrop-filter 没有可采样的
+        // DOM 背景,属于无效属性,一并去掉。
+        background: os === 'linux' ? 'var(--wi-window)' : 'transparent',
         animation: os === 'win' ? undefined : 'ol-window-enter 0.42s var(--ol-motion-spring) both',
-        transition: 'box-shadow 0.28s var(--ol-motion-soft), backdrop-filter 0.28s var(--ol-motion-soft)',
-        willChange: 'opacity, transform, filter',
+        transition: 'box-shadow 0.28s var(--ol-motion-soft)',
+        willChange: 'opacity, transform',
       } as CSSProperties}
     >
       {os === 'win' && <WinTitleBar title={title} />}
@@ -111,16 +113,17 @@ function WinTitleBar({ title }: WinTitleBarProps) {
         alignItems: 'stretch',
         position: 'relative',
         zIndex: 70,
-        borderBottom: '1px solid var(--wi-line)',
-        background: 'rgba(255,255,255,.84)',
+        // 标题栏融入玻璃外壳:透明 + 无分割线,与侧边栏共享同一块 Mica。
+        borderBottom: 'none',
+        background: 'transparent',
       }}
     >
       <div
         data-tauri-drag-region
         style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 18px 0 22px', gap: 10 }}
       >
-        <img src="preview-app-icon.png" alt="" style={{ width: 30, height: 30, borderRadius: 7 }} />
-        <span style={{ fontSize: 17, color: 'var(--wi-text)', fontWeight: 500 }}>{title}</span>
+        <img src="preview-app-icon.png" alt="" style={{ width: 30, height: 30, borderRadius: 8 }} />
+        <span style={{ fontSize: 14, color: 'var(--wi-text)', fontWeight: 500 }}>{title}</span>
       </div>
       <div style={{ display: 'flex', pointerEvents: 'auto' }}>
         <WinTitleButton title={t('windowChrome.minimize')} action="minimize">

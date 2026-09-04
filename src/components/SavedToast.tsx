@@ -29,7 +29,7 @@ export function SavedToast({ saveState, message, offsetStyle }: SavedToastProps)
       : '0.5px solid rgba(37,99,235,0.16)',
     background: failed ? 'rgba(239,68,68,0.10)' : 'rgba(37,99,235,0.10)',
     color: failed ? 'var(--ol-red, #ef4444)' : 'var(--ol-blue)',
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: 500,
     lineHeight: 1.4,
     boxShadow: '0 4px 12px -4px rgba(15,17,22,0.18), 0 0 0 0.5px rgba(0,0,0,0.04)',

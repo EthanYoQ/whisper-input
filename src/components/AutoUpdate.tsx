@@ -166,7 +166,7 @@ export function UpdateDialog({
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.18)', display: 'grid', placeItems: 'center', zIndex: 40 }}>
       <div style={{ width: 360, borderRadius: 16, background: 'var(--ol-surface)', border: '0.5px solid var(--ol-line-strong)', boxShadow: '0 18px 42px rgba(0,0,0,0.18)', padding: 18 }}>
-        <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 8 }}>{t(`settings.about.updateDialog.${status}.title`)}</div>
+        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>{t(`settings.about.updateDialog.${status}.title`)}</div>
         <div style={{ fontSize: 12, color: 'var(--ol-ink-3)', lineHeight: 1.6, marginBottom: 14 }}>
           {t(`settings.about.updateDialog.${status}.desc`, { version })}
         </div>
@@ -175,7 +175,7 @@ export function UpdateDialog({
             <div style={{ height: 8, borderRadius: 999, background: 'var(--ol-surface-2)', overflow: 'hidden', border: '0.5px solid var(--ol-line)' }}>
               <div style={{ height: '100%', width: `${status === 'downloaded' || installing ? 100 : progress ?? 8}%`, background: 'var(--ol-blue)', transition: 'width 0.18s var(--ol-motion-soft)' }} />
             </div>
-            <div style={{ marginTop: 6, fontSize: 11, color: 'var(--ol-ink-4)' }}>
+            <div style={{ marginTop: 6, fontSize: 12, color: 'var(--ol-ink-4)' }}>
               {installing
                 ? t('settings.about.updateDialog.installingLabel')
                 : progress === null

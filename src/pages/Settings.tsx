@@ -56,6 +56,13 @@ import type {
   WindowsImeStatus,
 } from '../lib/types';
 import { emitSaved } from '../lib/savedEvent';
+import {
+  GLASS_ALPHA_DEFAULT,
+  GLASS_ALPHA_MAX,
+  GLASS_ALPHA_MIN,
+  readGlassAlpha,
+  setGlassAlpha,
+} from '../lib/glassAlpha';
 import { providerLogoSrc } from '../lib/providerBrand';
 import { useHotkeySettings } from '../state/HotkeySettingsContext';
 import i18n, {
@@ -107,12 +114,13 @@ interface SettingsProps {
   embedded?: boolean;
   initialSection?: SettingsSectionId;
 }
-export type SettingsSectionId = 'models' | 'recording' | 'privacy' | 'output' | 'about';
+export type SettingsSectionId = 'models' | 'recording' | 'privacy' | 'output' | 'appearance' | 'about';
 const SECTION_ORDER: SettingsSectionId[] = [
   'models',
   'recording',
   'privacy',
   'output',
+  'appearance',
   'about',
 ];
 const SECTION_ICON_BY_ID: Record<SettingsSectionId, string> = {
@@ -120,6 +128,7 @@ const SECTION_ICON_BY_ID: Record<SettingsSectionId, string> = {
   recording: 'mic',
   privacy: 'cloud',
   output: 'translate',
+  appearance: 'blend',
   about: 'info',
 };
 
@@ -230,6 +239,7 @@ export function Settings({ embedded = false, initialSection = 'models' }: Settin
           {section === 'recording' && <RecordingSection />}
           {section === 'privacy' && <PrivacySection />}
           {section === 'output' && <LanguageSection />}
+          {section === 'appearance' && <AppearanceSection />}
           {section === 'about' && <AboutSection />}
         </div>
       </div>
@@ -369,22 +379,22 @@ function RecordingSection() {
     <div className="wi-recording-settings-grid">
       <Card className="wi-recording-settings-primary">
         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{t('settings.recording.title')}</div>
-        <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 6 }}>{t('settings.recording.desc')}</div>
+        <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginBottom: 6 }}>{t('settings.recording.desc')}</div>
         {isHotkeyModeMigrationNoticeActive() && (
           <div
             style={{
               marginTop: 10,
               marginBottom: 8,
               padding: '12px 14px',
-              borderRadius: 10,
+              borderRadius: 8,
               background: 'rgba(37,99,235,0.08)',
               border: '0.5px solid rgba(37,99,235,0.18)',
             }}
           >
-            <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ol-blue)', marginBottom: 4 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ol-blue)', marginBottom: 4 }}>
               {t('settings.recording.migrationNoticeTitle')}
             </div>
-            <div style={{ fontSize: 11.5, color: 'var(--ol-ink-3)', lineHeight: 1.55 }}>
+            <div style={{ fontSize: 12, color: 'var(--ol-ink-3)', lineHeight: 1.55 }}>
               {t('settings.recording.migrationNoticeDesc')}
             </div>
           </div>
@@ -407,7 +417,7 @@ function RecordingSection() {
                 style={{
                   padding: '5px 14px', fontSize: 12, fontWeight: 500,
                   border: 0, borderRadius: 6, fontFamily: 'inherit',
-                  background: prefs.hotkey.mode === v ? '#fff' : 'transparent',
+                  background: prefs.hotkey.mode === v ? 'var(--ol-surface-2)' : 'transparent',
                   color: prefs.hotkey.mode === v ? 'var(--ol-ink)' : 'var(--ol-ink-3)',
                   boxShadow: prefs.hotkey.mode === v ? '0 1px 2px rgba(0,0,0,.08)' : 'none',
                   cursor: 'default',
@@ -455,10 +465,10 @@ function RecordingSection() {
               <Icon name="chevRight" size={13} />
             </button>
             {!microphoneDevicesLoaded && (
-              <div style={{ fontSize: 11, color: 'var(--ol-ink-4)' }}>{t('common.loading')}</div>
+              <div style={{ fontSize: 12, color: 'var(--ol-ink-4)' }}>{t('common.loading')}</div>
             )}
             {microphoneDevicesError && (
-              <div style={{ fontSize: 11, color: 'var(--ol-err)', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12, color: 'var(--ol-err)', lineHeight: 1.5 }}>
                 {t('settings.recording.microphoneLoadError', { message: microphoneDevicesError })}
               </div>
             )}
@@ -493,7 +503,7 @@ function RecordingSection() {
               ? 'settings.advanced.streamingInsertTitleLinux'
               : 'settings.advanced.streamingInsertTitle')}
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 10, lineHeight: 1.55 }}>
+          <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginBottom: 10, lineHeight: 1.55 }}>
             {t('settings.advanced.streamingInsertDesc')}
           </div>
           <SettingRow
@@ -528,7 +538,7 @@ function RecordingSection() {
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
             {t('settings.recording.startupGroupTitle')}
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 6, lineHeight: 1.55 }}>
+          <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginBottom: 6, lineHeight: 1.55 }}>
             {t('settings.recording.startupAtBootDesc')}
           </div>
           <AutostartRow />
@@ -1135,7 +1145,7 @@ function MicrophonePickerDialog({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-          <div style={{ fontSize: 18, fontWeight: 500 }}>{t('settings.recording.microphoneDialogTitle')}</div>
+          <div style={{ fontSize: 16, fontWeight: 500 }}>{t('settings.recording.microphoneDialogTitle')}</div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <button
               type="button"
@@ -1191,11 +1201,11 @@ function MicrophonePickerDialog({
             </button>
           </div>
         </div>
-        <div style={{ fontSize: 12.5, color: 'var(--ol-ink-3)', lineHeight: 1.55, marginBottom: 18 }}>
+        <div style={{ fontSize: 13, color: 'var(--ol-ink-3)', lineHeight: 1.55, marginBottom: 18 }}>
           {t('settings.recording.microphoneDialogDesc')}
         </div>
         {monitorError && (
-          <div style={{ fontSize: 11.5, color: 'var(--ol-err)', lineHeight: 1.45, marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--ol-err)', lineHeight: 1.45, marginBottom: 12 }}>
             {t('settings.recording.microphoneMonitorError', { message: monitorError })}
           </div>
         )}
@@ -1234,7 +1244,7 @@ function MicrophonePickerDialog({
                   alignItems: 'center',
                   width: '100%',
                   padding: '14px 16px',
-                  borderRadius: 10,
+                  borderRadius: 8,
                   border: active ? '1px solid rgba(37,99,235,0.7)' : '0.5px solid rgba(0,0,0,0.12)',
                   background: active
                     ? 'rgba(37,99,235,0.08)'
@@ -1258,7 +1268,7 @@ function MicrophonePickerDialog({
                     {row.label}
                   </span>
                   {row.desc && (
-                    <span style={{ display: 'block', fontSize: 11.5, color: 'var(--ol-ink-4)', marginTop: 3 }}>
+                    <span style={{ display: 'block', fontSize: 12, color: 'var(--ol-ink-4)', marginTop: 3 }}>
                       {row.desc}
                     </span>
                   )}
@@ -1410,7 +1420,7 @@ function AutostartRow() {
           />
         ) : null}
         {error && (
-          <div style={{ fontSize: 11, color: 'var(--ol-err)', marginTop: 4, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12, color: 'var(--ol-err)', marginTop: 4, lineHeight: 1.5 }}>
             {t('settings.recording.startupAtBootError', { message: error })}
           </div>
         )}
@@ -1473,7 +1483,7 @@ function LlmThinkingToggle({ enabled, onToggle, disabled = false }: { enabled: b
         whiteSpace: 'nowrap',
       }}
     >
-      <span style={{ fontSize: 11.5, color: 'var(--ol-ink-4)' }}>
+      <span style={{ fontSize: 12, color: 'var(--ol-ink-4)' }}>
         {t('settings.providers.thinkingModeLabel')}
       </span>
       <Toggle
@@ -1482,7 +1492,7 @@ function LlmThinkingToggle({ enabled, onToggle, disabled = false }: { enabled: b
         onToggle={onToggle}
         disabled={disabled}
       />
-      <span style={{ fontSize: 11.5, color: enabled ? 'var(--ol-blue)' : 'var(--ol-ink-4)' }}>
+      <span style={{ fontSize: 12, color: enabled ? 'var(--ol-blue)' : 'var(--ol-ink-4)' }}>
         {enabled ? t('settings.providers.thinkingModeOn') : t('settings.providers.thinkingModeOff')}
       </span>
     </div>
@@ -2029,7 +2039,7 @@ function ModelsSection() {
               <img className="wi-provider-section-logo" src={providerLogoSrc(asrProvider)} alt="" />
               <div>
                 <div style={{ fontSize: 13, fontWeight: 500 }}>{t('settings.providers.asrTitle')}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginTop: 2 }}>{t('settings.providers.asrDesc')}</div>
+                <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginTop: 2 }}>{t('settings.providers.asrDesc')}</div>
               </div>
             </div>
             <div className="wi-provider-row">
@@ -2069,7 +2079,7 @@ function ModelsSection() {
               />
               <div>
                 <div style={{ fontSize: 13, fontWeight: 500 }}>{t('settings.providers.llmTitle')}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginTop: 2 }}>
                   {t('settings.providers.llmDesc')}
                 </div>
               </div>
@@ -2149,7 +2159,7 @@ function ProviderValidateButton({ kind, label }: { kind: 'asr' | 'llm'; label: s
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
       <button onClick={validate} style={miniBtnStyle} disabled={status === 'loading'}>{label}</button>
       {message && (
-        <span style={{ fontSize: 11, color: status === 'error' ? 'var(--ol-warn)' : status === 'loading' ? 'var(--ol-ink-4)' : 'var(--ol-ok)', lineHeight: 1.4 }}>
+        <span style={{ fontSize: 12, color: status === 'error' ? 'var(--ol-warn)' : status === 'loading' ? 'var(--ol-ink-4)' : 'var(--ol-ok)', lineHeight: 1.4 }}>
           {message}
         </span>
       )}
@@ -2337,7 +2347,7 @@ function AdvancedSection({ llmSwitching, beginLlmSwitch, isCurrentLlmSwitch, end
             <div style={{ fontSize: 13, fontWeight: 500, color: '#A04500', marginBottom: 6 }}>
               ⚠️ {t('settings.advanced.confirmEnableLocalTitle')}
             </div>
-            <div style={{ fontSize: 12.5, color: 'var(--ol-ink-2)', lineHeight: 1.6, marginBottom: 10 }}>
+            <div style={{ fontSize: 13, color: 'var(--ol-ink-2)', lineHeight: 1.6, marginBottom: 10 }}>
               {t('settings.advanced.confirmEnableLocalBody', {
                 target: t(`settings.providers.presets.${pendingNameKey}`),
               })}
@@ -2479,7 +2489,7 @@ function AdvancedSection({ llmSwitching, beginLlmSwitch, isCurrentLlmSwitch, end
                 onModelSelected={() => setAdvancedAsrModelRevision(value => value + 1)}
                 disabled={busy}
               />
-              <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', lineHeight: 1.55 }}>
+              <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', lineHeight: 1.55 }}>
                 {asrCopy.endpointHint}
               </div>
             </>
@@ -2492,12 +2502,12 @@ function AdvancedSection({ llmSwitching, beginLlmSwitch, isCurrentLlmSwitch, end
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{t('settings.advanced.localAsrTitle')}</div>
-            <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginTop: 2 }}>
               {t('settings.advanced.localAsrDesc')}
             </div>
           </div>
           <div style={{
-            fontSize: 11,
+            fontSize: 12,
             color: '#A04500',
             fontWeight: 500,
             lineHeight: 1.4,
@@ -2511,7 +2521,7 @@ function AdvancedSection({ llmSwitching, beginLlmSwitch, isCurrentLlmSwitch, end
         </div>
 
         {!platformSupported ? (
-          <div style={{ fontSize: 12.5, color: 'var(--ol-ink-3)', lineHeight: 1.6, padding: '8px 0' }}>
+          <div style={{ fontSize: 13, color: 'var(--ol-ink-3)', lineHeight: 1.6, padding: '8px 0' }}>
             {t('settings.advanced.platformNotSupported')}
           </div>
         ) : (
@@ -2676,7 +2686,7 @@ function ProviderTools({
           )}
         </div>
         {message && (
-          <span style={{ fontSize: 11, color: status === 'error' ? 'var(--ol-warn)' : status === 'empty' ? 'var(--ol-ink-4)' : 'var(--ol-ok)', lineHeight: 1.4 }}>
+          <span style={{ fontSize: 12, color: status === 'error' ? 'var(--ol-warn)' : status === 'empty' ? 'var(--ol-ink-4)' : 'var(--ol-ok)', lineHeight: 1.4 }}>
             {message}
           </span>
         )}
@@ -2885,7 +2895,7 @@ function CredentialField({ label, account, placeholder, mono, mask, defaultValue
         {status === 'readError' && (
           <span
             style={{
-              fontSize: 11,
+              fontSize: 12,
               color: 'var(--ol-warn)',
               whiteSpace: 'nowrap',
             }}
@@ -2910,7 +2920,7 @@ function CredentialField({ label, account, placeholder, mono, mask, defaultValue
 const inputStyle: CSSProperties = {
   flex: 1, height: 32, padding: '0 10px',
   border: '0.5px solid var(--ol-line-strong)',
-  borderRadius: 8, fontSize: 12.5,
+  borderRadius: 8, fontSize: 13,
   fontFamily: 'inherit', outline: 'none',
   background: 'var(--ol-surface-2)',
   width: '100%', maxWidth: 360,
@@ -2919,7 +2929,7 @@ const inputStyle: CSSProperties = {
 const miniBtnStyle: CSSProperties = {
   height: 32, padding: '0 10px',
   border: '0.5px solid var(--ol-line-strong)',
-  borderRadius: 8, background: 'var(--ol-surface)',
+  borderRadius: 8, background: 'var(--ol-surface-2)',
   color: 'var(--ol-ink-2)', cursor: 'default', flexShrink: 0,
   fontSize: 12, fontWeight: 500,
   transition: 'background 0.16s var(--ol-motion-quick), border-color 0.16s var(--ol-motion-quick), color 0.16s var(--ol-motion-quick)',
@@ -2939,7 +2949,7 @@ const hotkeyRecorderButtonStyle: CSSProperties = {
   justifyContent: 'space-between',
   gap: 8,
   fontFamily: 'var(--ol-font-mono)',
-  fontSize: 12.5,
+  fontSize: 13,
   cursor: 'default',
   transition: 'background 0.16s var(--ol-motion-quick), border-color 0.16s var(--ol-motion-quick), color 0.16s var(--ol-motion-quick)',
 };
@@ -3001,7 +3011,7 @@ const hotkeyClearButtonStyle: CSSProperties = {
 const iconBtnStyle: CSSProperties = {
   width: 32, height: 32,
   border: '0.5px solid var(--ol-line-strong)',
-  borderRadius: 8, background: 'var(--ol-surface)',
+  borderRadius: 8, background: 'var(--ol-surface-2)',
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   color: 'var(--ol-ink-3)', cursor: 'default', flexShrink: 0,
   transition: 'background 0.16s var(--ol-motion-quick), border-color 0.16s var(--ol-motion-quick), color 0.16s var(--ol-motion-quick)',
@@ -3029,7 +3039,7 @@ function ShortcutsSection() {
   return (
     <Card>
       <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{t('settings.shortcuts.title')}</div>
-      <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 6 }}>{desc}</div>
+      <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginBottom: 6 }}>{desc}</div>
       <SettingRow label={t('settings.shortcuts.startStop')}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
           <ShortcutRecorder
@@ -3040,7 +3050,7 @@ function ShortcutsSection() {
               await savePrefs({ ...prefs, dictationHotkey: binding });
             }}
           />
-          <div style={{ fontSize: 11, color: 'var(--ol-ink-4)' }}>
+          <div style={{ fontSize: 12, color: 'var(--ol-ink-4)' }}>
             {hotkey.mode === 'hold' ? t('hotkey.modeHoldSuffix') : t('hotkey.modeToggleSuffix')}
           </div>
         </div>
@@ -3238,7 +3248,7 @@ function PermissionsSection() {
   return (
     <Card>
       <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{t('settings.permissions.title')}</div>
-      <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 6 }}>
+      <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginBottom: 6 }}>
         {desc}
       </div>
       <SettingRow label={t('settings.permissions.micLabel')} desc={t('settings.permissions.micDesc')}>
@@ -3269,7 +3279,7 @@ function PermissionsSection() {
       >
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0, justifyContent: 'flex-end', width: '100%' }}>
           {hotkey?.message && (
-            <span style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={{ fontSize: 12, color: 'var(--ol-ink-4)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {hotkey.message}
             </span>
           )}
@@ -3283,7 +3293,7 @@ function PermissionsSection() {
         >
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0, justifyContent: 'flex-end', width: '100%' }}>
             {windowsIme && (
-              <span style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span style={{ fontSize: 12, color: 'var(--ol-ink-4)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {t(`settings.permissions.windowsIme.${windowsIme.state}`)}
               </span>
             )}
@@ -3358,7 +3368,7 @@ function LanguageSection() {
   return (
     <Card>
       <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{t('settings.language.title')}</div>
-      <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 6 }}>{t('settings.language.desc')}</div>
+      <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginBottom: 6 }}>{t('settings.language.desc')}</div>
       <SettingRow label={t('settings.language.label')} desc={t('settings.language.labelDesc')}>
         <select
           value={visibleLocalePref}
@@ -3386,9 +3396,58 @@ function LanguageSection() {
           ))}
         </select>
       </SettingRow>
-      <div style={{ fontSize: 11, color: 'var(--ol-ink-4)', marginTop: 8, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginTop: 8, lineHeight: 1.6 }}>
         {t('settings.language.restartHint')}
       </div>
+    </Card>
+  );
+}
+
+function AppearanceSection() {
+  const { t } = useTranslation();
+  const [alpha, setAlpha] = useState<number>(() => readGlassAlpha());
+  const percent = Math.round(alpha * 100);
+  const defaultPercent = Math.round(GLASS_ALPHA_DEFAULT * 100);
+
+  const onAlphaChange = (nextPercent: number) => {
+    setGlassAlpha(nextPercent / 100);
+    setAlpha(readGlassAlpha());
+  };
+
+  return (
+    <Card>
+      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{t('settings.appearance.title')}</div>
+      <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginBottom: 6 }}>{t('settings.appearance.desc')}</div>
+      <SettingRow label={t('settings.appearance.glassAlphaLabel')} desc={t('settings.appearance.glassAlphaDesc')}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <input
+            type="range"
+            min={Math.round(GLASS_ALPHA_MIN * 100)}
+            max={Math.round(GLASS_ALPHA_MAX * 100)}
+            step={1}
+            value={percent}
+            aria-label={t('settings.appearance.glassAlphaLabel')}
+            onChange={event => onAlphaChange(Number(event.target.value))}
+            style={{ width: 180, accentColor: 'var(--wi-blue)' }}
+          />
+          <span
+            style={{
+              fontSize: 12,
+              color: 'var(--ol-ink-3)',
+              minWidth: 40,
+              textAlign: 'right',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {percent}%
+          </span>
+          {percent !== defaultPercent && (
+            <button type="button" style={miniBtnStyle} onClick={() => onAlphaChange(defaultPercent)}>
+              {t('settings.appearance.glassAlphaReset')}
+            </button>
+          )}
+        </div>
+      </SettingRow>
     </Card>
   );
 }
@@ -3405,7 +3464,7 @@ function AboutSection() {
   return (
     <Card>
       <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{t('settings.about.title')}</div>
-      <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginBottom: 6 }}>{t('settings.about.desc')}</div>
+      <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginBottom: 6 }}>{t('settings.about.desc')}</div>
       <SettingRow label={t('settings.about.websiteLabel')} desc={t('settings.about.websiteDesc')}>
         <button style={miniBtnStyle} onClick={() => openAboutLink(repoUrl)}>
           {t('settings.about.websiteBtn')}
@@ -3442,7 +3501,7 @@ export function AboutUpdateControl({ tagline }: { tagline: string }) {
         </Btn>
       </div>
       {(u.status === 'none' || u.status === 'error') && (
-        <div style={{ fontSize: 11, color: u.status === 'error' ? 'var(--ol-err)' : 'var(--ol-ink-4)', marginTop: 4 }}>
+        <div style={{ fontSize: 12, color: u.status === 'error' ? 'var(--ol-err)' : 'var(--ol-ink-4)', marginTop: 4 }}>
           {u.status === 'none' ? t('settings.about.upToDate') : t('settings.about.updateError')}
         </div>
       )}

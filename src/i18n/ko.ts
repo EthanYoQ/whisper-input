@@ -363,6 +363,7 @@ export const ko: typeof zhCN = {
       language: '언어',
       output: '출력 및 언어',
       advanced: '고급',
+      appearance: '모양',
       about: '정보',
     },
     recording: {
@@ -649,6 +650,13 @@ export const ko: typeof zhCN = {
       outputZhTw: '중국어 번체',
       outputEn: 'English',
       restartHint: '일부 네이티브 메뉴(트레이 등)는 앱 재시작 후 반영될 수 있습니다.',
+    },
+    appearance: {
+      title: '모양',
+      desc: '유리 패널의 투명도입니다. 즉시 적용되며 저장됩니다.',
+      glassAlphaLabel: '유리 패널 불투명도',
+      glassAlphaDesc: '값이 낮을수록 바탕 화면 배경이 더 많이 비칩니다. 가장자리 하이라이트와 텍스트 대비는 변하지 않습니다.',
+      glassAlphaReset: '기본값으로 복원',
     },
     about: {
       title: '정보',

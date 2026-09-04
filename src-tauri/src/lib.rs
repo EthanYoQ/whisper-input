@@ -144,7 +144,7 @@ pub fn run() {
                 log::info!("[qa] qa 窗口未在 tauri.conf.json 中声明，前端 agent 会补上");
             }
 
-            // 主窗口磨砂：macOS 用 NSVisualEffectView，Windows 用 Mica。
+            // 主窗口磨砂：macOS 用 NSVisualEffectView，Windows 用 Acrylic。
             // 没这一层的话 transparent: true 让窗口透明 → 背后只是空，不是磨砂。
             //
             // decorations 留给运行时分平台决定：macOS 默认 true 用系统红黄绿；
@@ -177,14 +177,17 @@ pub fn run() {
                 }
                 #[cfg(target_os = "windows")]
                 {
-                    use window_vibrancy::apply_mica;
+                    use window_vibrancy::apply_acrylic;
                     // The window starts hidden so Windows native chrome can be disabled before
                     // the first show; doing this after the native frame is visible is unreliable.
                     if let Err(e) = main.set_decorations(false) {
                         log::warn!("[main] disable native decorations failed: {e}");
                     }
-                    if let Err(e) = apply_mica(&main, None) {
-                        log::warn!("[main] mica failed: {e}");
+                    // Acrylic(DWMSBT_TRANSIENTWINDOW):比 Mica 更强的真模糊,
+                    // 壁纸色相透过外壳/侧边栏/sheet 的 tint 透进来 —— 与胶囊同配方。
+                    // tint 全部由 CSS 提供,这里不传颜色。
+                    if let Err(e) = apply_acrylic(&main, None) {
+                        log::warn!("[main] acrylic failed: {e}");
                     }
                     apply_windows_rounded_frame(&main);
                 }
@@ -1175,7 +1178,68 @@ pub(crate) fn position_capsule_bottom_center<R: tauri::Runtime>(
     let y = (logical_h - capsule_visual_height(translation_active) - 80.0 - bounds.bottom_inset)
         .max(0.0);
     window.set_position(LogicalPosition::new(x, y))?;
+    #[cfg(target_os = "windows")]
+    apply_capsule_pill_blur(window, translation_active);
     Ok(())
+}
+
+/// 胶囊真磨砂:DWM blur-behind 限定在 pill 形区域。
+/// 整窗 Acrylic 会把 220×110 的透明窗口糊成矩形底板光晕(pill 只占
+/// 中间 196×52),所以用 DwmEnableBlurBehindWindow + pill 形 HRGN 只模糊
+/// 胶囊本体背后的桌面;模糊之外的 tint / rim 仍由 CSS 提供。
+/// 几何与 capsule_window_bounds / 前端 capsuleLayout 的 win metrics 同源:
+/// pill 196×52,左右 inset 12,底部 inset 12,host 高 84(翻译 118)。
+/// 纯视觉属性:不影响尺寸、命中测试与鼠标穿透;失败仅降级为 CSS 玻璃。
+#[cfg(target_os = "windows")]
+fn apply_capsule_pill_blur<R: Runtime>(window: &tauri::WebviewWindow<R>, translation_active: bool) {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use windows::Win32::Foundation::{BOOL, HWND};
+    use windows::Win32::Graphics::Dwm::{
+        DwmEnableBlurBehindWindow, DWM_BLURBEHIND, DWM_BB_BLURREGION, DWM_BB_ENABLE,
+    };
+    use windows::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject};
+
+    let handle = match window.window_handle().map(|h| h.as_raw()) {
+        Ok(RawWindowHandle::Win32(handle)) => handle,
+        Ok(other) => {
+            log::warn!("[capsule] unexpected raw window handle for pill blur: {other:?}");
+            return;
+        }
+        Err(e) => {
+            log::warn!("[capsule] read raw window handle failed: {e}");
+            return;
+        }
+    };
+    let hwnd = HWND(handle.hwnd.get() as *mut core::ffi::c_void);
+
+    // blur region 用物理像素(客户端区即整窗,decorations=false)。
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let host_h = if translation_active { 118.0 } else { 84.0 };
+    let x = (12.0 * scale).round() as i32;
+    let y = ((host_h - 12.0 - 52.0) * scale).round() as i32;
+    let w = (196.0 * scale).round() as i32;
+    let h = (52.0 * scale).round() as i32;
+
+    unsafe {
+        // 完全圆角:椭圆直径 = pill 高度。right/bottom 为闭区间语义,沿用
+        // apply_windows_rounded_frame 的 +1 写法。
+        let region = CreateRoundRectRgn(x, y, x + w + 1, y + h + 1, h, h);
+        if region.is_invalid() {
+            log::warn!("[capsule] create pill blur region failed");
+            return;
+        }
+        let blur = DWM_BLURBEHIND {
+            dwFlags: DWM_BB_ENABLE | DWM_BB_BLURREGION,
+            fEnable: BOOL(1),
+            hRgnBlur: region,
+            fTransitionOnMaximized: BOOL(0),
+        };
+        if let Err(e) = DwmEnableBlurBehindWindow(hwnd, &blur) {
+            log::warn!("[capsule] enable pill blur-behind failed: {e}");
+        }
+        // DWM 内部复制 region,句柄归调用方销毁。
+        let _ = DeleteObject(region);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

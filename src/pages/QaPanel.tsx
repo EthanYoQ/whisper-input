@@ -521,8 +521,8 @@ function ErrorRow({
 }) {
   return (
     <div style={errorRowStyle}>
-      <div style={{ fontSize: 12.5, color: 'var(--ol-err)', lineHeight: 1.55 }}>{message}</div>
-      <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)' }}>
+      <div style={{ fontSize: 13, color: 'var(--ol-err)', lineHeight: 1.55 }}>{message}</div>
+      <div style={{ fontSize: 12, color: 'var(--ol-ink-4)' }}>
         {t('qa.errorRetryHint', { recordHotkey })}
       </div>
     </div>
@@ -569,7 +569,7 @@ function StatusBar({
           flexShrink: 0,
         }}
       />
-      <span style={{ fontSize: 11.5, color: 'var(--ol-ink-3)', fontWeight: 500 }}>{label}</span>
+      <span style={{ fontSize: 12, color: 'var(--ol-ink-3)', fontWeight: 500 }}>{label}</span>
     </div>
   );
 }
@@ -602,7 +602,7 @@ const shellStyle: CSSProperties = {
   height: '100vh',
   display: 'flex',
   flexDirection: 'column',
-  borderRadius: 14,
+  borderRadius: 12,
   overflow: 'hidden',
   // 浮窗 focus:false 在 macOS 上会让 backdrop-filter 不工作（透到桌面文字），所以
   // 改成接近不透明的实色背景。blur 仅作锦上添花，不再依赖它保证可读性。
@@ -662,7 +662,7 @@ const recordingHeaderStyle: CSSProperties = {
 };
 
 const previewStyle: CSSProperties = {
-  fontSize: 11.5,
+  fontSize: 12,
   lineHeight: 1.5,
   padding: '8px 10px',
   borderRadius: 8,
@@ -684,7 +684,7 @@ const turnIndicatorStyle: CSSProperties = {
 const userBubbleStyle: CSSProperties = {
   maxWidth: '80%',
   padding: '8px 12px',
-  borderRadius: 14,
+  borderRadius: 12,
   borderBottomRightRadius: 4,
   background: 'var(--ol-blue)',
   color: '#fff',
@@ -696,10 +696,10 @@ const userBubbleStyle: CSSProperties = {
 const selectionQuoteStyle: CSSProperties = {
   maxWidth: '80%',
   padding: '6px 10px',
-  borderRadius: 10,
+  borderRadius: 8,
   background: 'rgba(0,0,0,0.04)',
   border: '0.5px solid rgba(0,0,0,0.06)',
-  fontSize: 11.5,
+  fontSize: 12,
   color: 'var(--ol-ink-3)',
   fontStyle: 'italic',
   lineHeight: 1.5,
@@ -708,7 +708,7 @@ const selectionQuoteStyle: CSSProperties = {
 const assistantBubbleStyle: CSSProperties = {
   maxWidth: '92%',
   padding: '8px 12px',
-  borderRadius: 14,
+  borderRadius: 12,
   borderBottomLeftRadius: 4,
   background: 'rgba(0,0,0,0.04)',
   fontSize: 13,
@@ -723,7 +723,7 @@ const errorRowStyle: CSSProperties = {
   flexDirection: 'column',
   gap: 4,
   padding: '8px 12px',
-  borderRadius: 10,
+  borderRadius: 8,
   background: 'rgba(220,38,38,0.06)',
   border: '0.5px solid rgba(220,38,38,0.18)',
 };

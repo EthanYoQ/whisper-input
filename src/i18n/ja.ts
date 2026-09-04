@@ -363,6 +363,7 @@ export const ja: typeof zhCN = {
       language: '言語',
       output: '出力と言語',
       advanced: '詳細設定',
+      appearance: '外観',
       about: '情報',
     },
     recording: {
@@ -649,6 +650,13 @@ export const ja: typeof zhCN = {
       outputZhTw: '繁体字中国語',
       outputEn: 'English',
       restartHint: '一部のネイティブメニュー（トレイ等）は再起動後に反映されます。',
+    },
+    appearance: {
+      title: '外観',
+      desc: 'ガラスパネルの透け具合。即時に反映され、保存されます。',
+      glassAlphaLabel: 'ガラスパネルの不透明度',
+      glassAlphaDesc: '値を下げるほど透けてデスクトップ壁紙が透過します。縁のハイライトと文字のコントラストは変わりません。',
+      glassAlphaReset: 'デフォルトに戻す',
     },
     about: {
       title: '情報',

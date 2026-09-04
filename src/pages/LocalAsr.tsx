@@ -635,7 +635,7 @@ function LocalAsrExperiment({ embedded = false }: LocalAsrProps = {}) {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: 'var(--ol-ink-4)' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--ol-ink-4)' }}>
                 {t('localAsr.foundrySelectedModel')}
                 <select
                   value={selectedFoundryAlias}
@@ -649,7 +649,7 @@ function LocalAsrExperiment({ embedded = false }: LocalAsrProps = {}) {
                     padding: '6px 10px',
                     borderRadius: 8,
                     border: '0.5px solid rgba(0,0,0,0.12)',
-                    background: 'var(--ol-surface)',
+                    background: 'var(--ol-surface-2)',
                     color: 'var(--ol-ink)',
                     minWidth: 260,
                   }}>
@@ -665,7 +665,7 @@ function LocalAsrExperiment({ embedded = false }: LocalAsrProps = {}) {
                   })}
                 </select>
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: 'var(--ol-ink-4)' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--ol-ink-4)' }}>
                 {t('localAsr.foundryRuntimeSourceLabel')}
                 <select
                   value={selectedFoundryRuntimeSource}
@@ -676,7 +676,7 @@ function LocalAsrExperiment({ embedded = false }: LocalAsrProps = {}) {
                     padding: '6px 10px',
                     borderRadius: 8,
                     border: '0.5px solid rgba(0,0,0,0.12)',
-                    background: 'var(--ol-surface)',
+                    background: 'var(--ol-surface-2)',
                     color: 'var(--ol-ink)',
                     minWidth: 200,
                   }}>
@@ -685,7 +685,7 @@ function LocalAsrExperiment({ embedded = false }: LocalAsrProps = {}) {
                   <option value="ort-nightly">{t('localAsr.foundryRuntimeSourceOrtNightly')}</option>
                 </select>
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: 'var(--ol-ink-4)' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--ol-ink-4)' }}>
                 {t('localAsr.foundryLanguageLabel')}
                 <select
                   value={selectedFoundryLanguageHint}
@@ -696,7 +696,7 @@ function LocalAsrExperiment({ embedded = false }: LocalAsrProps = {}) {
                     padding: '6px 10px',
                     borderRadius: 8,
                     border: '0.5px solid rgba(0,0,0,0.12)',
-                    background: 'var(--ol-surface)',
+                    background: 'var(--ol-surface-2)',
                     color: 'var(--ol-ink)',
                     minWidth: 132,
                   }}>
@@ -708,7 +708,7 @@ function LocalAsrExperiment({ embedded = false }: LocalAsrProps = {}) {
             </div>
           </div>
 
-          <div style={{ fontSize: 12.5, color: 'var(--ol-ink-3)', lineHeight: 1.6 }}>
+          <div style={{ fontSize: 13, color: 'var(--ol-ink-3)', lineHeight: 1.6 }}>
             <div>
               <span style={{ color: 'var(--ol-ink-4)' }}>{t('localAsr.foundrySelectedModel')}: </span>
               <strong>{selectedFoundryDisplayName}</strong>
@@ -824,7 +824,7 @@ function LocalAsrExperiment({ embedded = false }: LocalAsrProps = {}) {
               padding: '6px 10px',
               borderRadius: 8,
               border: '0.5px solid rgba(0,0,0,0.12)',
-              background: 'var(--ol-surface)',
+              background: 'var(--ol-surface-2)',
               color: 'var(--ol-ink)',
               minWidth: 200,
             }}>
@@ -878,7 +878,7 @@ function LocalAsrExperiment({ embedded = false }: LocalAsrProps = {}) {
                   padding: '6px 10px',
                   borderRadius: 8,
                   border: '0.5px solid rgba(0,0,0,0.12)',
-                  background: 'var(--ol-surface)',
+                  background: 'var(--ol-surface-2)',
                   color: 'var(--ol-ink)',
                   minWidth: 200,
                 }}>
@@ -929,7 +929,7 @@ function LocalAsrExperiment({ embedded = false }: LocalAsrProps = {}) {
 function LocalAsrExperimentUnavailable({ embedded }: { embedded: boolean }) {
   const content = (
     <Card>
-      <div style={{ fontSize: 12.5, color: 'var(--ol-ink-3)', lineHeight: 1.6 }}>
+      <div style={{ fontSize: 13, color: 'var(--ol-ink-3)', lineHeight: 1.6 }}>
         The standard product uses cloud ASR by default. Local ASR is a deprecated non-product experiment and is not available in standard product mode.
       </div>
     </Card>
@@ -1004,7 +1004,7 @@ function FoundryPrepareProgressBlock({
               <span style={{ fontSize: 12, color: 'var(--ol-ink-2)', fontWeight: 600 }}>
                 {stage.label}
               </span>
-              <span style={{ fontSize: 11, color: 'var(--ol-ink-4)' }}>
+              <span style={{ fontSize: 12, color: 'var(--ol-ink-4)' }}>
                 {failed ? t('localAsr.failed') : `${Math.round(percent)}%`}
               </span>
             </div>
@@ -1018,19 +1018,19 @@ function FoundryPrepareProgressBlock({
                 }}
               />
             </div>
-            <div style={{ fontSize: 11, color: 'var(--ol-ink-4)', marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginTop: 4 }}>
               {detail}
             </div>
           </div>
         );
       })}
       {cancelRequested && (
-        <div style={{ fontSize: 11.5, color: '#8a5a00', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: '#8a5a00', lineHeight: 1.5 }}>
           {t('localAsr.foundryCancelBestEffort')}
         </div>
       )}
       {progress?.phase === 'failed' && progress.error && (
-        <div style={{ fontSize: 11.5, color: '#9b2c2c', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: '#9b2c2c', lineHeight: 1.5 }}>
           {progress.error}
         </div>
       )}
@@ -1123,7 +1123,7 @@ function ModelRow({
                   }}
                 />
               </div>
-              <div style={{ fontSize: 11, color: 'var(--ol-ink-4)', marginTop: 6 }}>
+              <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginTop: 6 }}>
                 {progress?.phase === 'failed'
                   ? `${t('localAsr.failed')}: ${progress.error ?? ''}`
                   : `${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}` +
@@ -1192,7 +1192,7 @@ function TestResultBlock({ result }: { result: LocalAsrTestResult | { error: str
         padding: '10px 12px',
         background: hasError ? 'rgba(255, 220, 220, 0.5)' : 'rgba(0, 0, 0, 0.04)',
         borderRadius: 8,
-        fontSize: 12.5,
+        fontSize: 13,
         color: hasError ? '#9b2c2c' : 'var(--ol-ink-2)',
         lineHeight: 1.6,
       }}>
@@ -1202,7 +1202,7 @@ function TestResultBlock({ result }: { result: LocalAsrTestResult | { error: str
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ fontSize: 11, color: 'var(--ol-ink-4)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
             {t('localAsr.testHeading')}
           </div>
           <div>
@@ -1213,7 +1213,7 @@ function TestResultBlock({ result }: { result: LocalAsrTestResult | { error: str
             <span style={{ color: 'var(--ol-ink-4)' }}>{t('localAsr.testActual')}: </span>
             <strong>{result.transcribedText || '(空)'}</strong>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--ol-ink-4)' }}>
+          <div style={{ fontSize: 12, color: 'var(--ol-ink-4)' }}>
             {t('localAsr.testStats', {
               audio: (result.audioMs / 1000).toFixed(1),
               load: (result.loadMs / 1000).toFixed(1),
