@@ -208,10 +208,10 @@ export function ShortcutRecorder({
           ref={el => el?.focus()}
         >
           {t('settings.recording.comboRecordHint')}
-          <div style={{ fontSize: 11, color: 'var(--ol-ink-4)', marginTop: 4 }}>Esc 取消</div>
+          <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginTop: 4 }}>Esc 取消</div>
         </div>
       )}
-      {error && <div style={{ fontSize: 11, color: 'var(--ol-red, #ef4444)' }}>{error}</div>}
+      {error && <div style={{ fontSize: 12, color: 'var(--ol-red, #ef4444)' }}>{error}</div>}
     </div>
   );
 }

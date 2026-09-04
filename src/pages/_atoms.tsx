@@ -15,9 +15,9 @@ export function PageHeader({ kicker, title, desc, right }: PageHeaderProps) {
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, marginBottom: 24 }}>
       <div style={{ minWidth: 0 }}>
         {kicker && (
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--ol-ink-4)', marginBottom: 8 }}>{kicker}</div>
+          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--ol-ink-4)', marginBottom: 8 }}>{kicker}</div>
         )}
-        <h1 style={{ margin: 0, fontSize: 28, lineHeight: 1.16, fontWeight: 720, letterSpacing: 0, color: 'var(--ol-ink)', textWrap: 'balance' }}>{title}</h1>
+        <h1 style={{ margin: 0, fontSize: 22, lineHeight: 1.25, fontWeight: 700, letterSpacing: 0, color: 'var(--ol-ink)', textWrap: 'balance' }}>{title}</h1>
         {desc && <p style={{ margin: '9px 0 0', fontSize: 13, color: 'var(--ol-ink-3)', maxWidth: 660, lineHeight: 1.6, textWrap: 'pretty' }}>{desc}</p>}
       </div>
       {right}
@@ -73,8 +73,8 @@ export function Pill({ children, tone = 'default', size = 'md', style }: PillPro
   };
   const t = tones[tone];
   const sz = size === 'sm'
-    ? { padding: '2px 8px', fontSize: 10.5 }
-    : { padding: '4px 10px', fontSize: 11.5 };
+    ? { padding: '2px 8px', fontSize: 12 }
+    : { padding: '4px 10px', fontSize: 12 };
   return (
     <span
       style={{
@@ -116,7 +116,7 @@ export function Btn({ children, variant = 'ghost', size = 'md', icon, style, onC
   const v = variants[variant];
   const sizes: Record<BtnSize, { padding: string; fontSize: number }> = {
     sm: { padding: '5px 10px', fontSize: 12 },
-    md: { padding: '7px 14px', fontSize: 12.5 },
+    md: { padding: '7px 14px', fontSize: 13 },
   };
   return (
     <button
@@ -203,7 +203,7 @@ export function Collapsible({ title, desc, defaultOpen = false, embedded = false
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>{title}</div>
           {desc && (
-            <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginTop: 3, lineHeight: 1.5 }}>{desc}</div>
+            <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginTop: 3, lineHeight: 1.5 }}>{desc}</div>
           )}
         </div>
         <span

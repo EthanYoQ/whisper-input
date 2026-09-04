@@ -410,6 +410,7 @@ export const en: typeof zhCN = {
       language: 'Language',
       output: 'Output & Language',
       advanced: 'Advanced',
+      appearance: 'Appearance',
       about: 'About',
     },
     recording: {
@@ -696,6 +697,13 @@ export const en: typeof zhCN = {
       outputZhTw: 'Traditional Chinese',
       outputEn: 'English',
       restartHint: 'Some native menus (system tray, etc.) may require an app restart to fully switch.',
+    },
+    appearance: {
+      title: 'Appearance',
+      desc: 'How translucent the glass panels are. Applies instantly and is remembered.',
+      glassAlphaLabel: 'Glass panel opacity',
+      glassAlphaDesc: 'Lower values let more of the desktop wallpaper show through; edge highlights and text contrast are unaffected.',
+      glassAlphaReset: 'Reset',
     },
     about: {
       title: 'About',

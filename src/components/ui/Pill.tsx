@@ -20,8 +20,8 @@ export function Pill({ children, tone = 'default', size = 'md', style }: PillPro
   };
   const colors = tones[tone];
   const sizing = size === 'sm'
-    ? { padding: '2px 8px', fontSize: 10.5 }
-    : { padding: '4px 10px', fontSize: 11.5 };
+    ? { padding: '2px 8px', fontSize: 12 }
+    : { padding: '4px 10px', fontSize: 12 };
 
   return (
     <span

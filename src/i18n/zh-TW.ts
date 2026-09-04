@@ -380,6 +380,7 @@ export const zhTW: typeof zhCN = {
       language: '語言',
       output: '輸出與語言',
       advanced: '高級',
+      appearance: '外觀',
       about: '關於',
     },
     recording: {
@@ -666,6 +667,13 @@ export const zhTW: typeof zhCN = {
       outputZhTw: '繁體中文',
       outputEn: 'English',
       restartHint: '部分原生菜單（系統托盤等）可能需要重啓 App 纔會切換。',
+    },
+    appearance: {
+      title: '外觀',
+      desc: '玻璃面板的通透程度，即時生效並記住。',
+      glassAlphaLabel: '玻璃面板不透明度',
+      glassAlphaDesc: '數值越低越通透，桌面桌布透入越多；邊緣高光與文字對比不受影響。',
+      glassAlphaReset: '恢復預設',
     },
     about: {
       title: '關於',

@@ -70,7 +70,7 @@ function CenterText({ os, kind, text, color = 'var(--ol-ink-3)' }: CenterTextPro
   return (
     <span
       style={{
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 500,
         color,
         width: '100%',
@@ -100,8 +100,6 @@ interface CircleButtonProps {
 function CircleButton({ variant, enabled, onClick }: CircleButtonProps) {
   const { t } = useTranslation();
   const isCancel = variant === 'cancel';
-  const os = detectOS();
-  const useBackdrop = os !== 'win' && isCancel;
   return (
     <button
       onClick={enabled ? onClick : undefined}
@@ -111,11 +109,11 @@ function CircleButton({ variant, enabled, onClick }: CircleButtonProps) {
         width: 28,
         height: 28,
         borderRadius: 999,
-        background: isCancel ? 'rgba(255, 255, 255, 0.55)' : 'rgba(255, 255, 255, 0.92)',
-        backdropFilter: useBackdrop ? 'blur(12px) saturate(160%)' : 'none',
-        WebkitBackdropFilter: useBackdrop ? 'blur(12px) saturate(160%)' : 'none',
-        color: 'var(--ol-ink)',
-        border: '0.8px solid rgba(0, 0, 0, 0.08)',
+        // 玻璃 chip:磨砂由 OS(Acrylic/Vibrancy)提供,这里只画
+        // tint + 顶部 rim 高光,不再用 backdrop-filter(窗口根层级无可采样内容)。
+        background: isCancel ? 'var(--lg-pill-chip-dim)' : 'var(--lg-pill-chip)',
+        color: 'var(--lg-pill-ink)',
+        border: '0.5px solid var(--lg-rim-hairline)',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -124,7 +122,7 @@ function CircleButton({ variant, enabled, onClick }: CircleButtonProps) {
         visibility: 'visible',
         flexShrink: 0,
         padding: 0,
-        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.06)',
+        boxShadow: 'inset 0 1px 0 var(--lg-pill-rim), 0 1px 2px rgba(15, 23, 42, 0.10)',
         transition: 'opacity 0.18s var(--ol-motion-soft), background 0.16s var(--ol-motion-quick), transform 0.12s var(--ol-motion-quick)',
       }}
     >
@@ -240,8 +238,7 @@ function Pill({ os, state, level, insertedChars, message, onCancel, onConfirm }:
 
   const ambient = state === 'recording' ? Math.min(1, Math.max(0, level)) : 0;
   const scale = os === 'win' ? 1 : 1 + ambient * 0.018;
-  const shadowAlpha = 0.20 + ambient * 0.10;
-  const useBackdrop = os !== 'win';
+  const shadowAlpha = 0.22 + ambient * 0.08;
 
   return (
     <div
@@ -255,14 +252,15 @@ function Pill({ os, state, level, insertedChars, message, onCancel, onConfirm }:
         height: metrics.height,
         boxSizing: metrics.boxSizing,
         borderRadius: 999,
-        background: 'rgba(255, 255, 255, 0.62)',
-        backdropFilter: useBackdrop ? 'blur(28px) saturate(180%)' : 'none',
-        WebkitBackdropFilter: useBackdrop ? 'blur(28px) saturate(180%)' : 'none',
-        border: '1px solid rgba(255, 255, 255, 0.55)',
-        boxShadow: os === 'win'
-          ? `0 10px 24px -14px rgba(0, 0, 0, ${(0.24 + ambient * 0.06).toFixed(3)}), 0 0 0 0.5px rgba(0, 0, 0, 0.08), inset 0 0.5px 0 rgba(255, 255, 255, 0.55)`
-          : `0 18px 50px -10px rgba(0, 0, 0, ${shadowAlpha.toFixed(3)}), 0 0 0 0.5px rgba(0, 0, 0, 0.08), inset 0 0.5px 0 rgba(255, 255, 255, 0.55)`,
-        color: 'var(--ol-ink)',
+        position: 'relative',
+        overflow: 'hidden',
+        // Liquid Glass pill 档:无色渐变 tint + 三道 rim 内高光读作
+        // 打磨边缘;模糊全部交给 OS(整窗 Acrylic 会糊成矩形底板,
+        // 所以胶囊刻意不用 OS 模糊,靠足够实的奶白 tint 保证可读)。
+        background: 'linear-gradient(180deg, var(--lg-pill-top), var(--lg-pill-bottom))',
+        border: '1px solid var(--lg-pill-border)',
+        boxShadow: `0 12px 32px -10px rgba(15, 23, 42, ${shadowAlpha.toFixed(3)}), 0 2px 8px -4px rgba(15, 23, 42, 0.14), inset 0 1px 0 var(--lg-pill-rim), inset 0 0 0 0.5px var(--lg-rim-hairline), inset 0 -1px 0 var(--lg-rim-bottom)`,
+        color: 'var(--lg-pill-ink)',
         fontFamily: 'var(--ol-font-sans)',
         transform: `scale(${scale.toFixed(4)})`,
         transformOrigin: 'center',
@@ -270,8 +268,19 @@ function Pill({ os, state, level, insertedChars, message, onCancel, onConfirm }:
         willChange: 'transform, box-shadow',
       }}
     >
+      {/* 语音响应高光:顶部受光面随音量呼吸,模拟玻璃对环境的反射 */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          inset: 0,
+          borderRadius: 999,
+          pointerEvents: 'none',
+          background: `radial-gradient(130% 95% at 50% -35%, rgba(255, 255, 255, ${(0.30 + ambient * 0.30).toFixed(3)}), transparent 62%)`,
+        }}
+      />
       <CircleButton variant="cancel" enabled={enabled} onClick={onCancel} />
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
         {center}
       </div>
       <CircleButton variant="confirm" enabled={enabled} onClick={onConfirm} />
@@ -371,14 +380,12 @@ export function Capsule() {
             gap: 5,
             padding: '3px 10px',
             borderRadius: 999,
-            fontSize: 10.5,
+            fontSize: 12,
             fontWeight: 600,
             color: 'var(--ol-blue)',
-            background: 'rgba(255, 255, 255, 0.78)',
-            backdropFilter: 'blur(20px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            border: '0.5px solid rgba(37, 99, 235, 0.25)',
-            boxShadow: '0 4px 12px -4px rgba(37, 99, 235, 0.25), 0 0 0 0.5px rgba(0,0,0,0.04)',
+            background: 'linear-gradient(180deg, var(--lg-pill-top), var(--lg-pill-bottom))',
+            border: '1px solid var(--lg-pill-border)',
+            boxShadow: 'inset 0 1px 0 var(--lg-pill-rim), 0 4px 12px -4px rgba(15, 23, 42, 0.18)',
             letterSpacing: '0.02em',
             whiteSpace: 'nowrap',
             // 隐藏：从 pill 中线偏下出发；显示：归位到 wrapper（pill 上方 25px）

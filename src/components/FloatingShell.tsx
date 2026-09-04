@@ -320,7 +320,7 @@ function ProviderSetupPrompt({ onLater, onOpenSettings }: { onLater: () => void;
           </div>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ol-ink)' }}>{t('shell.providerPrompt.title')}</div>
         </div>
-        <div style={{ fontSize: 12.5, color: 'var(--ol-ink-3)', lineHeight: 1.55 }}>
+        <div style={{ fontSize: 13, color: 'var(--ol-ink-3)', lineHeight: 1.55 }}>
           {t('shell.providerPrompt.body')}
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
@@ -334,7 +334,7 @@ function ProviderSetupPrompt({ onLater, onOpenSettings }: { onLater: () => void;
               background: 'var(--ol-surface)',
               color: 'var(--ol-ink-3)',
               fontFamily: 'inherit',
-              fontSize: 12.5,
+              fontSize: 13,
               fontWeight: 500,
               cursor: 'default',
               transition: 'background 0.16s var(--ol-motion-quick), border-color 0.16s var(--ol-motion-quick)',
@@ -352,7 +352,7 @@ function ProviderSetupPrompt({ onLater, onOpenSettings }: { onLater: () => void;
               background: 'var(--ol-ink)',
               color: '#fff',
               fontFamily: 'inherit',
-              fontSize: 12.5,
+              fontSize: 13,
               fontWeight: 500,
               cursor: 'default',
               transition: 'background 0.16s var(--ol-motion-quick), transform 0.12s var(--ol-motion-quick)',
@@ -413,7 +413,7 @@ function HotkeyModeMigrationPrompt({ onLater, onOpenSettings }: { onLater: () =>
           </div>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ol-ink)' }}>{t('shell.hotkeyModePrompt.title')}</div>
         </div>
-        <div style={{ fontSize: 12.5, color: 'var(--ol-ink-3)', lineHeight: 1.55 }}>
+        <div style={{ fontSize: 13, color: 'var(--ol-ink-3)', lineHeight: 1.55 }}>
           {t('shell.hotkeyModePrompt.body')}
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
@@ -427,7 +427,7 @@ function HotkeyModeMigrationPrompt({ onLater, onOpenSettings }: { onLater: () =>
               background: 'var(--ol-surface)',
               color: 'var(--ol-ink-3)',
               fontFamily: 'inherit',
-              fontSize: 12.5,
+              fontSize: 13,
               fontWeight: 500,
               cursor: 'default',
               transition: 'background 0.16s var(--ol-motion-quick), border-color 0.16s var(--ol-motion-quick)',
@@ -445,7 +445,7 @@ function HotkeyModeMigrationPrompt({ onLater, onOpenSettings }: { onLater: () =>
               background: 'var(--ol-ink)',
               color: '#fff',
               fontFamily: 'inherit',
-              fontSize: 12.5,
+              fontSize: 13,
               fontWeight: 500,
               cursor: 'default',
               transition: 'background 0.16s var(--ol-motion-quick), transform 0.12s var(--ol-motion-quick)',

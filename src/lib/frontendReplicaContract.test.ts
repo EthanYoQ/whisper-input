@@ -55,7 +55,7 @@ assert(
 );
 
 assert(
-  REQUIRED_SETTINGS_SECTIONS.join(',') === 'models,recording,privacy,output,about',
+  REQUIRED_SETTINGS_SECTIONS.join(',') === 'models,recording,privacy,output,appearance,about',
   `required settings sections should match preview replica contract, got ${REQUIRED_SETTINGS_SECTIONS.join(',')}`,
 );
 
@@ -300,8 +300,8 @@ assert(
 );
 
 assert(
-  previewCssSource.includes('height: 50px;') && previewCssSource.includes('min-height: 50px;'),
-  '设置二级 Tab 必须固定 50px 高度，切换到录音与热键等长页面时不得被压扁',
+  previewCssSource.includes('height: 38px;') && previewCssSource.includes('min-height: 38px;'),
+  '设置二级 Tab 必须固定 38px 高度(与顶栏帮助/语言按钮同高同线),切换到录音与热键等长页面时不得被压扁',
 );
 
 assert(

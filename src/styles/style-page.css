@@ -63,7 +63,7 @@
 .wi-style-pack-group-label {
   padding: 0 7px 7px;
   color: var(--wi-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -136,7 +136,7 @@
 .wi-style-pack-current {
   flex: 0 0 auto;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 20px;
 }
@@ -149,13 +149,14 @@
 
 .wi-style-pack-current {
   padding: 0 8px;
-  background: var(--wi-blue);
-  color: #fff;
+  /* 与 .wi-pill-blue 同一语言:蓝纱底 + 蓝字,不再铺实心蓝块。 */
+  background: var(--wi-blue-soft);
+  color: var(--wi-blue);
 }
 
 .wi-style-pack-desc {
   color: var(--wi-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -219,7 +220,7 @@
 }
 
 .wi-style-detail-name-row h2 {
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.3;
 }
 
@@ -366,7 +367,7 @@ textarea.wi-style-demo-input:focus {
 .wi-style-preview-empty span {
   max-width: 480px;
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -390,7 +391,7 @@ textarea.wi-style-demo-input:focus {
 
 .wi-style-disabled-note {
   color: var(--wi-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .wi-style-page-error {
@@ -398,7 +399,7 @@ textarea.wi-style-demo-input:focus {
   margin: -4px 3px 10px;
   padding: 9px 12px;
   border: 1px solid var(--wi-danger-line);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(239, 68, 68, 0.06);
 }
 
@@ -416,7 +417,7 @@ textarea.wi-style-demo-input:focus {
 .wi-style-editor {
   width: min(860px, calc(100vw - 48px));
   max-height: calc(100% - 48px);
-  border-radius: 18px;
+  border-radius: 12px;
   background: var(--wi-panel);
   box-shadow: 0 24px 70px -28px rgba(15, 23, 42, 0.58);
   display: flex;
@@ -439,14 +440,14 @@ textarea.wi-style-demo-input:focus {
 }
 
 .wi-style-editor-head h2 {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .wi-style-editor-head p,
 .wi-style-draft-preview p {
   margin: 5px 0 0;
   color: var(--wi-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -456,7 +457,7 @@ textarea.wi-style-demo-input:focus {
   flex: 0 0 auto;
   padding: 0;
   border: 0;
-  border-radius: 9px;
+  border-radius: 8px;
   background: transparent;
   color: var(--wi-muted);
   display: inline-flex;
@@ -506,13 +507,13 @@ textarea.wi-style-demo-input:focus {
 .wi-style-editor-fields textarea.wi-style-examples-json {
   min-height: 132px;
   font-family: Consolas, monospace;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .wi-style-draft-preview {
   align-self: start;
   padding: 16px;
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--wi-control-muted);
   box-shadow: var(--wi-inset-ring-soft);
   display: grid;
@@ -531,7 +532,7 @@ textarea.wi-style-demo-input:focus {
 
 .wi-style-draft-preview-result {
   padding: 11px 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--wi-panel);
   color: var(--wi-text);
   font-size: 12px;

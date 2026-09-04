@@ -17,7 +17,7 @@ export function Card({ children, style, padding = 18, glassy = false, className 
         backdropFilter: glassy ? 'blur(20px) saturate(160%)' : undefined,
         WebkitBackdropFilter: glassy ? 'blur(20px) saturate(160%)' : undefined,
         border: '0 solid transparent',
-        borderRadius: 18,
+        borderRadius: 12,
         padding,
         boxShadow: 'var(--ol-card-shadow, var(--ol-shadow-sm))',
         ...style,

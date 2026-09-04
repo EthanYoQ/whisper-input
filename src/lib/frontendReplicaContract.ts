@@ -6,6 +6,7 @@ export const REQUIRED_SETTINGS_SECTIONS = [
   'recording',
   'privacy',
   'output',
+  'appearance',
   'about',
 ] as const;
 
@@ -48,8 +49,8 @@ export const PREVIEW_VISUAL_TOKENS = {
   sidebarPadding: '28px 10px 22px',
   navButtonHeight: '52px',
   navIconSize: '24',
-  navFont: '500 17px/1',
-  topToolsTop: '27px',
+  navFont: '500 16px/1',
+  topToolsTop: '31px',
   topToolHeight: '38px',
   modelCardColumns: '86px 1fr auto',
   modelLogoClass: 'wi-model-logo',

@@ -1,22 +1,30 @@
 :root {
   --wi-window: #f6f9fd;
-  --wi-panel: rgba(255, 255, 255, 0.92);
+  /* --wi-panel 由 glass.css 接管(玻璃薄纱 + 透明度滑杆),此处不再定义,
+     避免 dev HMR 重排 style 标签顺序时旧的不透明值复活。 */
   --wi-line: #d9e3ef;
   --wi-line-soft: #edf3f8;
   --wi-text: #111827;
   --wi-muted: #738196;
+  /* 侧边栏导航文字:侧栏薄纱比 sheet 透得多,壁纸色相直接透入,
+     通用 --wi-muted 在其上对比不足 —— 导航用更深一档的墨色。 */
+  --wi-nav-ink: rgba(15, 23, 42, 0.78);
   --wi-blue: #0f6fff;
-  --wi-blue-soft: #eaf3ff;
+  /* 玻璃化控件层:浅色主题不再用不透明 #fff/#f3f6fa 铺面 ——
+     不透明填色叠在 sheet 上会层层累加成「白板」,透不出壁纸色相。
+     控件(按钮/输入)用半透明白纱,容器(分组/列表)用墨色轻烟
+     (与深色主题的白烟镜像对称),分隔交给 hairline 与投影。 */
+  --wi-blue-soft: rgb(15 111 255 / calc(0.10 * var(--lg-alpha-scale, 1)));
   --wi-purple: #7659f5;
-  --wi-purple-soft: #f2edff;
+  --wi-purple-soft: rgb(118 89 245 / calc(0.12 * var(--lg-alpha-scale, 1)));
   --wi-green: #16a34a;
-  --wi-green-soft: #eafaf0;
+  --wi-green-soft: rgb(22 163 74 / calc(0.12 * var(--lg-alpha-scale, 1)));
   --wi-orange: #f59e0b;
-  --wi-orange-soft: #fff7ed;
+  --wi-orange-soft: rgb(245 158 11 / calc(0.10 * var(--lg-alpha-scale, 1)));
   --wi-red: #ef4444;
-  --wi-control: #fff;
-  --wi-control-muted: #f3f6fa;
-  --wi-control-active: linear-gradient(180deg, #fff, #f9fbff);
+  --wi-control: rgb(255 255 255 / calc(0.45 * var(--lg-alpha-scale, 1)));
+  --wi-control-muted: rgb(15 23 42 / calc(0.045 * var(--lg-alpha-scale, 1)));
+  --wi-control-active: rgb(255 255 255 / calc(0.78 * var(--lg-alpha-scale, 1)));
   --wi-danger-line: #fecaca;
   --wi-pill-green-text: #15803d;
   --wi-pill-orange-text: #c87900;
@@ -32,11 +40,12 @@
 
 :root[data-theme='dark'] {
   --wi-window: #171a20;
-  --wi-panel: rgba(31, 34, 42, 0.92);
+  /* --wi-panel 由 glass.css 接管,见上方说明。 */
   --wi-line: rgba(255, 255, 255, 0.12);
   --wi-line-soft: rgba(255, 255, 255, 0.08);
   --wi-text: #f5f7fb;
   --wi-muted: rgba(245, 247, 251, 0.64);
+  --wi-nav-ink: rgba(245, 247, 251, 0.85);
   --wi-blue-soft: rgba(15, 111, 255, 0.18);
   --wi-purple-soft: rgba(118, 89, 245, 0.18);
   --wi-green-soft: rgba(22, 163, 74, 0.16);
@@ -61,7 +70,9 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
-  background: var(--wi-window);
+  /* 透明:Mica/Vibrancy 由 OS 合成在 webview 之下;这里再涂底色
+     就把玻璃盖掉了。Linux 无 OS 模糊,由 WindowChrome 容器兜底。 */
+  background: transparent;
   color: var(--wi-text);
   font-family: var(--wi-font);
   overflow: hidden;
@@ -71,17 +82,18 @@
 
 .wi-shell {
   display: grid;
-  grid-template-columns: clamp(205px, 20vw, 250px) minmax(0, 1fr);
+  /* 固定 216px:导航最长标签「词汇表」内容积约 122px,余量克制;
+     不再随 vw 生长——宽屏多出的空间全部让给正文(Arc 式窄栏)。
+     1240px 窗口下栏:sheet ≈ 17.6% : 82.4%。 */
+  grid-template-columns: 216px minmax(0, 1fr);
   min-height: 0;
 }
 
 .wi-titlebar-slot {
-  border-bottom: 1px solid var(--wi-line);
-  background: rgba(255, 255, 255, 0.72);
-}
-
-:root[data-theme='dark'] .wi-titlebar-slot {
-  background: rgba(31, 34, 42, 0.72);
+  /* Arc 式:侧边栏整列向上延伸进标题栏,槽位不再有自己的
+     白底和分隔线,与侧边栏薄纱融为一体。 */
+  border-bottom: 0;
+  background: transparent;
 }
 
 .wi-main {
@@ -90,11 +102,22 @@
   position: relative;
   padding: 31px 34px 32px;
   overflow: hidden;
+  /* Arc 式正文 sheet:胶囊配方的真半透明渐变 tint(顶→底),
+     圆角浮在玻璃外壳里,四周留 8px 缝让外壳(Acrylic/Mica)露出——
+     左上/左下角不再被侧边栏列缘和窗口顶缘裁切,四角的 16px 弧线
+     完整可读(make-interfaces-feel-better §1:相邻面之间的缝给圆角留呼吸)。
+     正文可读性由 OS 模糊兜底,不靠不透明白板。 */
+  background: linear-gradient(180deg, var(--lg-sheet-top), var(--lg-sheet-bottom));
+  border-radius: var(--lg-sheet-radius);
+  margin: 8px;
+  box-shadow: inset 0 0 0 0.5px var(--lg-sheet-ring), var(--lg-sheet-shadow);
 }
 
 .wi-top-tools {
   position: absolute;
-  top: 27px;
+  /* top 与 sheet 内容 padding-top 同值:帮助/语言按钮(38px)与设置页
+     Tab 条(38px)落在同一水平带,所有页面顶栏高度统一。 */
+  top: 31px;
   right: 34px;
   display: flex;
   align-items: center;
@@ -121,9 +144,9 @@
   min-width: 58px;
   padding: 0 14px;
   border: 0;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--wi-control);
   border-radius: 12px;
-  color: #334155;
+  color: var(--wi-text);
   font: 500 14px var(--wi-font);
   box-shadow: var(--wi-inset-ring-soft), 0 1px 2px rgba(15, 23, 42, 0.04);
 }
@@ -136,22 +159,22 @@
 .wi-sidebar {
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid var(--wi-line);
-  background: rgba(255, 255, 255, 0.70);
+  border-right: 0;
+  /* 悬浮式侧栏(Arc 现行形态):与 sheet 同为浮板,上缘与 sheet 顶对齐
+     (均距标题栏 8px),四角 16px 弧线与 sheet 同档,左/下各留 8px 缝。
+     不再贴死窗口左缘——此前栏顶比 sheet 高 8px 且上角为直角,交界读作缺角。 */
+  margin: 8px 0 8px 8px;
+  border-radius: var(--lg-sheet-radius);
+  box-shadow: inset 0 0 0 0.5px var(--lg-sheet-ring), var(--lg-sheet-shadow);
+  /* 玻璃薄纱:Mica 之上叠一层极浅渐变,导航文字稳定、壁纸纹理仍透出。 */
+  background: linear-gradient(180deg, var(--lg-sidebar-top), var(--lg-sidebar-bottom));
   display: flex;
   flex-direction: column;
   padding: 28px 10px 22px;
   overflow: hidden;
 }
 
-:root[data-theme='dark'] .wi-sidebar {
-  background: rgba(24, 27, 34, 0.72);
-}
-
-:root[data-theme='dark'] .wi-commandbar .wi-btn {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--wi-text);
-}
+/* 顶栏按钮深浅色均由 --wi-control token 承担,不再需要深色覆写。 */
 
 .wi-brand {
   min-width: 0;
@@ -188,7 +211,7 @@
 
 .wi-brand strong {
   color: var(--wi-text);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.25;
 }
 
@@ -212,39 +235,27 @@
   border: 0;
   border-radius: 12px;
   background: transparent;
-  color: #1f2937;
+  color: var(--wi-nav-ink);
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 0 18px 0 22px;
-  font: 500 17px/1 var(--wi-font);
+  font: 500 16px/1 var(--wi-font);
   text-align: left;
   cursor: default;
-}
-
-.wi-side-nav button::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  border-radius: 0;
-  background: transparent;
+  transition: background-color 0.16s var(--ol-motion-quick), color 0.16s var(--ol-motion-quick), box-shadow 0.18s var(--ol-motion-soft);
 }
 
 .wi-side-nav button:hover {
   color: var(--wi-text);
-  background: var(--wi-control-muted);
+  background: var(--lg-nav-hover);
 }
 
+/* 选中态 = 抬起的玻璃 chip(Arc 活动标签),不再用左侧色条。 */
 .wi-side-nav button.active {
   color: var(--wi-blue);
-  background: var(--wi-blue-soft);
-}
-
-.wi-side-nav button.active::before {
-  background: var(--wi-blue);
+  background: var(--lg-nav-active);
+  box-shadow: inset 0 0 0 0.5px var(--lg-nav-active-ring), var(--lg-nav-active-shadow);
 }
 
 .wi-side-nav button svg {
@@ -254,7 +265,7 @@
 .wi-side-foot {
   margin-top: auto;
   padding: 0 22px;
-  color: #64748b;
+  color: var(--wi-nav-ink);
   font-size: 14px;
   line-height: 2;
 }
@@ -271,7 +282,7 @@
 .wi-card {
   background: var(--wi-panel);
   border: 0;
-  border-radius: 18px;
+  border-radius: 12px;
   box-shadow: var(--wi-surface-shadow);
 }
 
@@ -279,9 +290,9 @@
   height: 39px;
   padding: 0 15px;
   border: 0;
-  border-radius: 10px;
-  background: #fff;
-  color: #1f2937;
+  border-radius: 8px;
+  background: var(--wi-control);
+  color: var(--wi-text);
   font: 500 13px var(--wi-font);
   display: inline-flex;
   align-items: center;
@@ -300,9 +311,12 @@
 }
 
 .wi-btn-primary {
-  background: #2563eb;
+  /* 主行动按钮(liquid-glass 规则 2 允许的品牌色例外):色相统一为 --wi-blue
+     (原 #2563eb 与 #0f6fff 两种蓝并存),改为带 rim 高光的微渐变纱化蓝,
+     不再是死实心块;不随透明度滑杆缩放,保证主行动点稳定可辨。 */
+  background: linear-gradient(180deg, rgb(15 111 255 / 0.92), rgb(15 111 255 / 0.82));
   color: #fff;
-  box-shadow: 0 8px 22px -16px rgba(37, 99, 235, 0.72);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.20), inset 0 0 0 0.5px rgb(15 111 255 / 0.36), 0 8px 22px -16px rgba(15, 111, 255, 0.58);
 }
 
 .wi-btn-danger {
@@ -360,8 +374,8 @@
 
 .wi-page-title-block h1 {
   margin: 0;
-  font-size: 30px;
-  line-height: 1.15;
+  font-size: 22px;
+  line-height: 1.25;
   letter-spacing: 0;
   text-wrap: balance;
 }
@@ -476,7 +490,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  border-radius: 18px;
+  border-radius: 12px;
   box-shadow: var(--wi-surface-shadow);
 }
 
@@ -595,7 +609,7 @@
 .wi-select,
 .wi-textarea {
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--wi-control);
   color: var(--wi-text);
   font: 13px var(--wi-font);
@@ -629,14 +643,15 @@
   display: flex;
   justify-content: space-between;
   width: min(720px, 100%);
-  height: 50px;
-  min-height: 50px;
+  /* 38px:与右上角帮助/语言按钮同高,顶缘同线(sheet padding-top 31)。 */
+  height: 38px;
+  min-height: 38px;
   flex: 0 0 auto;
   min-width: 0;
   border: 0;
   border-radius: 12px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.66);
+  background: rgb(255 255 255 / calc(0.22 * var(--lg-alpha-scale, 1)));
   box-shadow: var(--wi-inset-ring-soft), 0 10px 26px -24px rgba(15, 23, 42, 0.32);
 }
 
@@ -651,7 +666,7 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  font: 650 14px var(--wi-font);
+  font: 600 14px var(--wi-font);
   padding: 0 14px;
   text-align: center;
 }
@@ -669,16 +684,12 @@
 
 .wi-settings-tab-active {
   color: var(--wi-blue);
-  background: rgba(255, 255, 255, 0.84);
+  background: var(--lg-nav-active);
   box-shadow: inset 0 -2px 0 rgba(15, 111, 255, 0.56);
 }
 
 :root[data-theme='dark'] .wi-settings-tabs {
-  background: rgba(255, 255, 255, 0.045);
-}
-
-:root[data-theme='dark'] .wi-settings-tab-active {
-  background: rgba(255, 255, 255, 0.075);
+  background: rgb(255 255 255 / calc(0.05 * var(--lg-alpha-scale, 1)));
 }
 
 .wi-settings-tab-desc,
@@ -751,7 +762,7 @@
 
 .wi-settings-panel-recording .ol-setting-desc {
   margin-top: 2px !important;
-  font-size: 11.5px !important;
+  font-size: 12px !important;
   line-height: 1.4 !important;
 }
 
@@ -784,7 +795,7 @@
 .wi-recording-settings-status-hint {
   margin-top: 2px;
   color: var(--ol-ink-4);
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.35;
   text-wrap: pretty;
 }
@@ -795,7 +806,7 @@
   gap: 4px;
   padding: 4px;
   border: 0;
-  border-radius: 13px;
+  border-radius: 12px;
   background: var(--wi-control);
   box-shadow: var(--wi-inset-ring-soft);
 }
@@ -804,7 +815,7 @@
   flex: 1 1 0;
   min-width: 0;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   color: var(--wi-muted);
   font: 500 13px var(--wi-font);
@@ -813,12 +824,14 @@
 }
 
 .wi-mode-option-active {
-  background: var(--wi-blue);
-  color: var(--wi-mode-active-text);
+  /* 同 wi-model-mode 的克制选中态:蓝纱+白纱,蓝字,不铺实心蓝块。 */
+  background: linear-gradient(var(--wi-blue-soft), var(--wi-blue-soft)), var(--lg-nav-active);
+  color: var(--wi-blue);
+  box-shadow: inset 0 0 0 0.5px var(--lg-nav-active-ring), var(--lg-nav-active-shadow);
 }
 
 .wi-mode-option-active .wi-mode-option-desc {
-  color: var(--wi-mode-active-desc);
+  color: var(--wi-muted);
 }
 
 .wi-model-mode {
@@ -843,7 +856,7 @@
 .wi-model-storage-notice {
   margin: 0;
   color: var(--ol-ink-4);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -851,7 +864,7 @@
   min-height: 60px;
   margin-bottom: 0;
   padding: 5px;
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 .wi-model-settings-compact .wi-model-mode button {
@@ -899,12 +912,12 @@
 .wi-model-settings-compact .wi-plan-logo {
   width: 76px;
   height: 76px;
-  border-radius: 15px;
+  border-radius: 12px;
 }
 
 .wi-model-settings-compact .wi-plan-heading {
   gap: 7px;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .wi-model-settings-compact .wi-plan-desc {
@@ -915,7 +928,7 @@
 
 .wi-model-settings-compact .wi-plan-meta {
   margin-top: 7px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .wi-model-settings-compact .wi-quick-card {
@@ -968,7 +981,7 @@
   min-width: 0;
   flex: 1;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   color: var(--wi-muted);
   font: 500 13px var(--wi-font);
@@ -978,7 +991,7 @@
 .wi-model-mode button small {
   display: block;
   margin-top: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--wi-muted);
   overflow: hidden;
@@ -987,12 +1000,15 @@
 }
 
 .wi-model-mode button.active {
-  background: var(--wi-blue);
-  color: var(--wi-mode-active-text);
+  /* 克制选中态(liquid-glass 规则 2):大面不铺实心蓝块,蓝纱叠导航白纱,
+     蓝字蓝边表达选中——与设置 Tab、侧边导航同一套激活语言,深浅色自动成立。 */
+  background: linear-gradient(var(--wi-blue-soft), var(--wi-blue-soft)), var(--lg-nav-active);
+  color: var(--wi-blue);
+  box-shadow: inset 0 0 0 0.5px var(--lg-nav-active-ring), var(--lg-nav-active-shadow);
 }
 
 .wi-model-mode button.active small {
-  color: var(--wi-mode-active-desc);
+  color: var(--wi-muted);
 }
 
 .wi-model-grid {
@@ -1010,18 +1026,16 @@
   grid-template-columns: 86px 1fr auto;
   align-items: center;
   gap: 16px;
-  background: linear-gradient(135deg, #fff, #f8fbff);
-  border-radius: 18px;
+  background: var(--wi-panel);
+  border-radius: 12px;
 }
 
 .wi-provider-card-asr {
   border-color: #d8cdfc;
-  background: linear-gradient(135deg, #fff, #fbf8ff);
 }
 
 .wi-provider-card-llm {
   border-color: #cfe0ff;
-  background: linear-gradient(135deg, #fff, #f5fbff);
 }
 
 :root[data-theme='dark'] .wi-provider-card,
@@ -1074,7 +1088,7 @@
   color: var(--wi-text);
   font-size: 22px;
   font-weight: 600;
-  line-height: 1.18;
+  line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1128,19 +1142,19 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  border-radius: 18px;
+  border-radius: 12px;
 }
 
 .wi-metric-icon {
   width: 50px;
   height: 50px;
   flex: 0 0 auto;
-  border-radius: 15px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
   background: var(--wi-blue-soft);
   color: var(--wi-blue);
-  font-size: 27px;
+  font-size: 24px;
   font-weight: 600;
 }
 
@@ -1177,7 +1191,7 @@
   display: block;
   margin: 3px 0 1px;
   color: var(--wi-text);
-  font-size: 25px;
+  font-size: 24px;
   line-height: 1.1;
   font-weight: 600;
   letter-spacing: 0;
@@ -1213,7 +1227,7 @@
   min-width: 0;
   height: 100%;
   padding: 22px;
-  border-radius: 18px;
+  border-radius: 12px;
 }
 
 .wi-week-card {
@@ -1236,8 +1250,8 @@
   gap: 14px;
   margin-bottom: 12px;
   color: var(--wi-text);
-  font-size: 20px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .wi-overview-card-title {
@@ -1264,7 +1278,7 @@
 
 .wi-recent-head .wi-btn {
   height: 32px;
-  border-radius: 9px;
+  border-radius: 8px;
 }
 
 .wi-overview-empty {
@@ -1299,7 +1313,9 @@
       transparent 49px,
       rgba(148, 163, 184, 0.17) 50px
     ),
-    linear-gradient(180deg, #fff, #fbfdff);
+    linear-gradient(180deg,
+      rgb(255 255 255 / calc(0.30 * var(--lg-alpha-scale, 1))),
+      rgb(251 253 255 / calc(0.22 * var(--lg-alpha-scale, 1))));
   overflow: hidden;
   box-shadow: var(--wi-inset-ring-soft);
 }
@@ -1308,20 +1324,20 @@
   display: inline-flex;
   gap: 4px;
   padding: 4px;
-  background: #f4f7fb;
-  border-radius: 10px;
+  background: var(--wi-control-muted);
+  border-radius: 8px;
 }
 
 .wi-segment-mini span {
   padding: 7px 13px;
   border-radius: 8px;
-  color: #64748b;
+  color: var(--wi-muted);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .wi-segment-mini .active {
-  background: #fff;
+  background: var(--wi-control);
   color: var(--wi-blue);
 }
 
@@ -1330,8 +1346,8 @@
   padding: 12px 15px;
   border: 0;
   border-radius: 12px;
-  background: #fbfdff;
-  color: #475569;
+  background: var(--wi-control-muted);
+  color: var(--wi-muted);
   font-size: 14px;
   line-height: 1.45;
   overflow: hidden;
@@ -1369,8 +1385,8 @@
   align-items: center;
   justify-items: end;
   color: var(--wi-muted);
-  font-size: 11px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 14px;
   white-space: nowrap;
 }
@@ -1423,7 +1439,7 @@
   transform: translateX(-50%);
   color: inherit;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 14px;
   white-space: nowrap;
 }
@@ -1497,7 +1513,7 @@
   pointer-events: none;
   color: var(--wi-muted);
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   background: rgba(255, 255, 255, 0.72);
 }
 
@@ -1588,9 +1604,9 @@
 }
 
 .wi-overview-page .wi-page-title-block h1 {
-  font-size: 28px;
-  line-height: 1.18;
-  font-weight: 720;
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 700;
   text-wrap: balance;
 }
 
@@ -1632,7 +1648,7 @@
   padding: 20px 24px;
   grid-template-columns: 68px minmax(0, 1fr) auto;
   gap: 16px;
-  border-radius: 20px;
+  border-radius: 16px;
 }
 
 .wi-overview-page .wi-provider-card-asr {
@@ -1657,15 +1673,15 @@
 
 .wi-overview-page .wi-provider-meta > span:first-child {
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   color: #66758a;
 }
 
 .wi-overview-page .wi-provider-name {
   margin-top: 9px;
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1.16;
-  font-weight: 720;
+  font-weight: 700;
 }
 
 .wi-overview-page .wi-provider-subname {
@@ -1682,13 +1698,13 @@
   height: 108px;
   padding: 18px 20px;
   gap: 14px;
-  border-radius: 20px;
+  border-radius: 16px;
 }
 
 .wi-overview-page .wi-metric-icon {
   width: 48px;
   height: 48px;
-  border-radius: 15px;
+  border-radius: 12px;
   font-size: 0;
   box-shadow: inset 0 0 0 1px rgba(15, 111, 255, 0.08);
 }
@@ -1702,20 +1718,20 @@
 }
 
 .wi-overview-page .wi-metric-copy span {
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .wi-overview-page .wi-metric-copy b {
   margin: 4px 0 2px;
   font-size: 24px;
   line-height: 1.08;
-  font-weight: 720;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .wi-overview-page .wi-metric-copy small {
   font-size: 12px;
-  font-weight: 550;
+  font-weight: 500;
 }
 
 .wi-overview-page .wi-overview-bottom {
@@ -1726,20 +1742,20 @@
 .wi-overview-page .wi-week-card,
 .wi-overview-page .wi-recent-card {
   padding: 20px;
-  border-radius: 20px;
+  border-radius: 16px;
 }
 
 .wi-overview-page .wi-overview-card-head {
   margin-bottom: 13px;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.25;
-  font-weight: 720;
+  font-weight: 700;
   text-wrap: balance;
 }
 
 .wi-overview-page .wi-overview-card-unit {
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .wi-overview-page .wi-week-chart {
@@ -1760,8 +1776,8 @@
 }
 
 .wi-overview-page .wi-week-y-axis {
-  font-size: 10.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .wi-overview-page .wi-week-grid-line {
@@ -1778,8 +1794,8 @@
 
 .wi-overview-page .wi-week-point-value {
   bottom: 9px;
-  font-size: 11px;
-  font-weight: 720;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .wi-overview-page .wi-week-point-dot {
@@ -1790,15 +1806,15 @@
 
 .wi-overview-page .wi-week-date,
 .wi-overview-page .wi-week-label {
-  font-size: 11.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .wi-overview-page .wi-chart-note {
   margin-top: 14px;
   padding: 11px 14px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   background: rgba(248, 250, 252, 0.74);
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.055);
   font-size: 13px;
@@ -1842,7 +1858,7 @@
 
 .wi-overview-page .wi-recent-tags .wi-pill {
   min-height: 21px;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .wi-overview-page .wi-btn {
@@ -1887,6 +1903,120 @@
   color: var(--wi-text);
 }
 
+/* 存量 bug 修复:.wi-week-date 硬编码 #334155(浅色专用),
+   深色下近乎隐形;半透明 sheet 让壁纸提亮局部后彻底不可读。 */
+:root[data-theme='dark'] .wi-week-date {
+  color: var(--wi-muted);
+}
+
+/* ─────────────────────────────────────────────────────────
+   Overview「安静」改造 —— glass 设计系统 skill 规则 3:
+   面板内部的子区域不再各自涂表面/阴影,改用分组描边 + 分隔线。
+   本块置于旧规则之后,同优先级靠顺序覆盖;深色规则带
+   :root[data-theme='dark'] 前缀对齐旧特异度。
+   ───────────────────────────────────────────────────────── */
+
+/* 卡片基座:去阴影、去浮起、去渐变底 */
+.wi-overview-page .wi-card {
+  box-shadow: none;
+  transition: none;
+}
+.wi-overview-page .wi-provider-card,
+.wi-overview-page .wi-provider-card-asr,
+.wi-overview-page .wi-provider-card-llm,
+.wi-overview-page .wi-metric-card,
+.wi-overview-page .wi-week-card,
+.wi-overview-page .wi-recent-card {
+  background: transparent;
+  border-radius: 0;
+}
+.wi-overview-page .wi-provider-card:hover,
+.wi-overview-page .wi-metric-card:hover,
+.wi-overview-page .wi-week-card:hover,
+.wi-overview-page .wi-recent-card:hover {
+  box-shadow: none;
+}
+
+/* 模型双卡 / 指标四连 → 单描边分组容器,内部细分隔线。
+   注意不能加 overflow:hidden:它会把 flex min-height 归零,
+   窄窗口 stacked 时卡片会被压缩裁切(圆角裁切改靠内部透明,无需 overflow)。 */
+.wi-overview-page .wi-model-grid,
+.wi-overview-page .wi-metric-grid {
+  gap: 0;
+  border: 1px solid var(--wi-line-soft);
+  border-radius: 12px;
+  background: var(--lg-card-bg);
+}
+.wi-overview-page .wi-provider-card + .wi-provider-card,
+.wi-overview-page .wi-metric-card + .wi-metric-card {
+  border-left: 1px solid var(--wi-line-soft);
+}
+
+/* 底部双面板:同样的描边分组语言 */
+.wi-overview-page .wi-week-card,
+.wi-overview-page .wi-recent-card {
+  border: 1px solid var(--wi-line-soft);
+  border-radius: 12px;
+  background: var(--lg-card-bg);
+}
+
+/* 面板标题降噪:18px/800 → 15px/650 */
+.wi-overview-page .wi-overview-card-head {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* 页标题降噪:28px → 22px */
+.wi-overview-page .wi-page-title-block h1 {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+/* 图表内盒与注释条 flatten,网格线交给 SVG */
+.wi-overview-page .wi-week-chart {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 8px 4px 4px;
+}
+.wi-overview-page .wi-chart-note {
+  background: transparent;
+  box-shadow: none;
+  padding: 11px 2px 0;
+}
+
+:root[data-theme='dark'] .wi-overview-page .wi-provider-card,
+:root[data-theme='dark'] .wi-overview-page .wi-provider-card-asr,
+:root[data-theme='dark'] .wi-overview-page .wi-provider-card-llm,
+:root[data-theme='dark'] .wi-overview-page .wi-metric-card,
+:root[data-theme='dark'] .wi-overview-page .wi-week-card,
+:root[data-theme='dark'] .wi-overview-page .wi-recent-card {
+  background: transparent;
+}
+:root[data-theme='dark'] .wi-overview-page .wi-model-grid,
+:root[data-theme='dark'] .wi-overview-page .wi-metric-grid,
+:root[data-theme='dark'] .wi-overview-page .wi-week-card,
+:root[data-theme='dark'] .wi-overview-page .wi-recent-card {
+  background: var(--lg-card-bg);
+  border-color: rgba(255, 255, 255, 0.07);
+}
+:root[data-theme='dark'] .wi-overview-page .wi-provider-card + .wi-provider-card,
+:root[data-theme='dark'] .wi-overview-page .wi-metric-card + .wi-metric-card {
+  border-left-color: rgba(255, 255, 255, 0.07);
+}
+:root[data-theme='dark'] .wi-overview-page .wi-week-chart,
+:root[data-theme='dark'] .wi-overview-page .wi-chart-note {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* 深色下 Overview 按钮不再用浅色底(存量问题,浅色卡片时代看不出) */
+:root[data-theme='dark'] .wi-overview-page .wi-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--wi-text);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.10);
+}
+
 .wi-style-page {
   height: 100%;
   min-height: 0;
@@ -1902,7 +2032,7 @@
   align-items: center;
   gap: 8px;
   padding: 5px 8px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--wi-control-muted);
 }
 
@@ -1937,7 +2067,7 @@
   min-width: 0;
   min-height: 172px;
   padding: 18px;
-  border-radius: 18px;
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -2027,7 +2157,7 @@
   border: 0;
   background: transparent;
   color: var(--wi-text);
-  font: 800 15px var(--wi-font);
+  font: 700 16px var(--wi-font);
   line-height: 1.3;
   text-align: left;
   cursor: default;
@@ -2134,7 +2264,7 @@
   min-width: 0;
   height: 224px;
   border: 0;
-  border-radius: 20px;
+  border-radius: 16px;
   padding: 24px 56px 24px 28px;
   background: var(--ol-card-bg, var(--ol-surface));
   box-shadow: var(--ol-card-shadow, var(--ol-shadow-sm));
@@ -2172,7 +2302,7 @@
   width: 82px;
   height: 82px;
   object-fit: contain;
-  border-radius: 18px;
+  border-radius: 12px;
   outline: 1px solid rgba(15, 23, 42, 0.08);
   outline-offset: -1px;
 }
@@ -2202,8 +2332,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 20px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .wi-plan-desc {
@@ -2268,14 +2398,14 @@
 }
 
 .wi-provider-label span {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--ol-ink);
   text-wrap: balance;
 }
 
 .wi-provider-label small {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ol-ink-4);
 }
 
@@ -2315,7 +2445,7 @@
 
 .wi-help-card-title {
   margin: 0 0 12px;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.25;
   text-wrap: balance;
 }
@@ -2341,7 +2471,7 @@
 
 .wi-help-item strong {
   color: var(--wi-text);
-  font-weight: 750;
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2400,6 +2530,10 @@
 
 .wi-vocab-main-only {
   grid-column: 1 / -1;
+  /* 词条页限宽居中:芯片云不需要铺满整张 sheet(typography §1.1 阅读容器)。 */
+  max-width: 780px;
+  width: 100%;
+  justify-self: center;
 }
 
 .wi-vocab-side {
@@ -2423,9 +2557,9 @@
 .wi-vocab-section-head h2 {
   margin: 0;
   color: var(--wi-text);
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1.25;
-  font-weight: 800;
+  font-weight: 700;
   text-wrap: balance;
 }
 
@@ -2567,8 +2701,8 @@
   justify-content: center;
   font-family: var(--wi-font);
   font-variant-numeric: tabular-nums;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2700,7 +2834,7 @@
   height: 28px;
   padding: 0 10px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--wi-control-muted);
   color: var(--wi-muted);
   font: 700 12px var(--wi-font);
@@ -2730,7 +2864,7 @@
 .wi-correction-arrow {
   color: var(--wi-muted);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .wi-correction-list {
@@ -2797,7 +2931,7 @@
 
 .wi-settings-panel > .ol-card {
   width: 100%;
-  border-radius: 14px !important;
+  border-radius: 12px !important;
   box-shadow: var(--wi-surface-shadow) !important;
 }
 
@@ -2831,7 +2965,7 @@
 
 .wi-privacy-title {
   color: var(--wi-text);
-  font: 750 14px/1.4 var(--wi-font);
+  font: 700 14px/1.4 var(--wi-font);
 }
 
 .wi-privacy-desc,
@@ -2853,7 +2987,7 @@
   gap: 0;
   margin: 0;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--wi-control-muted);
 }
 
@@ -2867,7 +3001,7 @@
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .wi-privacy-data-flow .wi-help-item + .wi-help-item {
@@ -2900,13 +3034,13 @@
 .wi-privacy-group-title {
   padding: 0 2px;
   color: var(--wi-muted);
-  font: 700 12.5px/1.4 var(--wi-font);
+  font: 700 13px/1.4 var(--wi-font);
 }
 
 .wi-privacy-control-group {
   min-width: 0;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--wi-control-muted);
 }
 
@@ -2929,14 +3063,14 @@
 
 .wi-privacy-action-label {
   color: var(--wi-text);
-  font: 700 13.5px/1.4 var(--wi-font);
+  font: 700 14px/1.4 var(--wi-font);
 }
 
 .wi-privacy-action-desc {
   max-width: 720px;
   margin-top: 3px;
   color: var(--wi-muted);
-  font: 500 12.5px/1.5 var(--wi-font);
+  font: 500 13px/1.5 var(--wi-font);
   overflow-wrap: anywhere;
   text-wrap: pretty;
 }
@@ -3007,7 +3141,7 @@
 .wi-overview-page .wi-model-logo {
   width: 52px;
   height: 52px;
-  border-radius: 13px;
+  border-radius: 12px;
 }
 
 .wi-overview-page .wi-metric-grid {
@@ -3028,7 +3162,7 @@
 
 .wi-overview-page .wi-week-y-axis,
 .wi-overview-page .wi-week-point-value {
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .wi-overview-page .wi-week-date,
@@ -3038,7 +3172,7 @@
 
 .wi-style-card {
   padding: 16px;
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 .wi-style-sample {
@@ -3067,7 +3201,7 @@
   }
 
   .wi-top-tools {
-    top: 20px;
+    top: 24px;
     right: 22px;
     gap: 9px;
   }
@@ -3089,7 +3223,7 @@
 
   .wi-page-title-block h1,
   .wi-overview-page .wi-page-title-block h1 {
-    font-size: 26px;
+    font-size: 22px;
   }
 
   .wi-overview-page,
@@ -3193,5 +3327,41 @@
   .wi-vocab-layout {
     flex: 0 0 auto;
     overflow: visible;
+  }
+}
+
+/* 窄窗口(≤1100px)下分组盒内分隔线换向:provider 卡片纵向堆叠改用
+   顶部分隔线;metric 2×2 时偶数位竖线 + 第二行横线。放在原有媒体查询
+   之后,同优先级靠顺序覆盖其 gap。 */
+@media (max-width: 1100px) {
+  .wi-overview-page .wi-model-grid,
+  .wi-overview-page .wi-metric-grid {
+    gap: 0;
+  }
+
+  .wi-overview-page .wi-provider-card + .wi-provider-card {
+    border-left: 0;
+    border-top: 1px solid var(--wi-line-soft);
+  }
+
+  .wi-overview-page .wi-metric-card + .wi-metric-card {
+    border-left: 0;
+  }
+
+  .wi-overview-page .wi-metric-card:nth-child(even) {
+    border-left: 1px solid var(--wi-line-soft);
+  }
+
+  .wi-overview-page .wi-metric-card:nth-child(n + 3) {
+    border-top: 1px solid var(--wi-line-soft);
+  }
+
+  :root[data-theme='dark'] .wi-overview-page .wi-provider-card + .wi-provider-card,
+  :root[data-theme='dark'] .wi-overview-page .wi-metric-card:nth-child(even) {
+    border-color: rgba(255, 255, 255, 0.07);
+  }
+
+  :root[data-theme='dark'] .wi-overview-page .wi-metric-card:nth-child(n + 3) {
+    border-top-color: rgba(255, 255, 255, 0.07);
   }
 }

@@ -74,7 +74,7 @@ export function SettingsModal({ os: _os, onClose, initialSettingsSection }: Sett
         style={{
           width: '100%', maxWidth: 880, height: '100%', maxHeight: 600,
           background: 'var(--ol-surface)',
-          borderRadius: 14,
+          borderRadius: 12,
           border: '0.5px solid rgba(0,0,0,.08)',
           boxShadow: '0 30px 80px -20px rgba(15,17,22,.35), 0 0 0 0.5px rgba(0,0,0,.06)',
           display: 'flex', overflow: 'hidden',
@@ -102,7 +102,7 @@ export function SettingsModal({ os: _os, onClose, initialSettingsSection }: Sett
                     right: 0,
                     top: pillRect.top,
                     height: pillRect.height,
-                    background: '#fff',
+                    background: 'var(--ol-surface-2)',
                     borderRadius: 8,
                     boxShadow: '0 1px 2px rgba(0,0,0,.05), 0 0 0 0.5px rgba(0,0,0,.06)',
                     transition: 'top 0.36s var(--ol-motion-spring), height 0.36s var(--ol-motion-spring)',
@@ -165,7 +165,7 @@ export function SettingsModal({ os: _os, onClose, initialSettingsSection }: Sett
             <Icon name="close" size={14} />
           </button>
 
-          <h2 style={{ margin: 0, padding: '22px 28px 8px', fontSize: 22, fontWeight: 650, letterSpacing: 0, flexShrink: 0, textWrap: 'balance' }}>{t(`modal.sections.${section}`)}</h2>
+          <h2 style={{ margin: 0, padding: '22px 28px 8px', fontSize: 22, fontWeight: 700, letterSpacing: 0, flexShrink: 0, textWrap: 'balance' }}>{t(`modal.sections.${section}`)}</h2>
 
           {section === 'settings' ? (
             <div style={{ flex: 1, minHeight: 0, padding: '10px 28px 28px', display: 'flex', flexDirection: 'column' }}>
@@ -235,7 +235,7 @@ function PersonalizeSection() {
                   height: 28,
                   border: 0,
                   borderRadius: 6,
-                  background: selected ? '#fff' : 'transparent',
+                  background: selected ? 'var(--ol-surface-2)' : 'transparent',
                   color: selected ? 'var(--ol-ink)' : 'var(--ol-ink-3)',
                   fontFamily: 'inherit',
                   fontSize: 12,
@@ -306,7 +306,7 @@ function AboutMini() {
 const btnGhost: CSSProperties = {
   padding: '5px 10px', fontSize: 12, borderRadius: 6,
   border: '0.5px solid var(--ol-line-strong)',
-  background: '#fff', color: 'var(--ol-ink-2)',
+  background: 'var(--ol-surface-2)', color: 'var(--ol-ink-2)',
   cursor: 'default', fontFamily: 'inherit',
   transition: 'background 0.16s var(--ol-motion-quick), border-color 0.16s var(--ol-motion-quick)',
 };
@@ -327,7 +327,7 @@ function LanguagePicker() {
       style={{
         height: 32, padding: '0 10px',
         border: '0.5px solid var(--ol-line-strong)',
-        borderRadius: 8, fontSize: 12.5,
+        borderRadius: 8, fontSize: 13,
         fontFamily: 'inherit', outline: 'none',
         background: 'var(--ol-surface-2)',
         minWidth: 200, cursor: 'default',

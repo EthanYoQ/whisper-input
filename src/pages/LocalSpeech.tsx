@@ -18,10 +18,10 @@ const inputStyle: CSSProperties = {
   height: 32,
   borderRadius: 8,
   border: '0.5px solid var(--ol-line-strong)',
-  background: 'var(--ol-surface)',
+  background: 'var(--ol-surface-2)',
   color: 'var(--ol-ink)',
   fontFamily: 'inherit',
-  fontSize: 12.5,
+  fontSize: 13,
   padding: '0 10px',
   outline: 'none',
   boxSizing: 'border-box',
@@ -218,7 +218,7 @@ function LocalSpeechExperiment() {
               placeholder={primarySource?.baseUrl ?? t('localSpeech.sourcePlaceholder')}
               style={inputStyle}
             />
-            <div style={{ fontSize: 11.5, color: 'var(--ol-ink-4)', marginTop: 6, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginTop: 6, lineHeight: 1.5 }}>
               {t('localSpeech.customSourceDesc')}
             </div>
           </div>
@@ -261,7 +261,7 @@ function LocalAsrExperimentUnavailable() {
         desc="The standard product uses cloud ASR by default. Local ASR is a deprecated non-product experiment."
       />
       <Card>
-        <div style={{ fontSize: 12.5, color: 'var(--ol-ink-3)', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 13, color: 'var(--ol-ink-3)', lineHeight: 1.6 }}>
           This page is not available in standard product mode.
         </div>
       </Card>
@@ -289,13 +289,13 @@ function InfoCell({
         background: 'var(--ol-surface-2)',
       }}
     >
-      <div style={{ fontSize: 11, color: 'var(--ol-ink-4)', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 12, color: 'var(--ol-ink-4)', marginBottom: 4 }}>{label}</div>
       {tone ? (
         <Pill tone={tone} size="sm">{value}</Pill>
       ) : (
         <div
           style={{
-            fontSize: 12.5,
+            fontSize: 13,
             color: 'var(--ol-ink-2)',
             lineHeight: 1.45,
             overflow: 'hidden',

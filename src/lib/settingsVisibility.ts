@@ -6,7 +6,7 @@ import {
 } from './product';
 import type { OutputLanguagePreference, UserPreferences } from './types';
 
-export const STANDARD_SETTINGS_SECTION_IDS = ['models', 'recording', 'privacy', 'output', 'about'] as const;
+export const STANDARD_SETTINGS_SECTION_IDS = ['models', 'recording', 'privacy', 'output', 'appearance', 'about'] as const;
 
 export type StandardLlmProviderId =
   | typeof QWEN_LLM_PROVIDER_ID

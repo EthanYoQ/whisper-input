@@ -134,11 +134,11 @@ export function Translation() {
               justifyContent: 'space-between',
               gap: 10,
               padding: '8px 12px',
-              borderRadius: 10,
+              borderRadius: 8,
               border: '0.5px solid rgba(239,68,68,0.22)',
               background: 'rgba(239,68,68,0.07)',
               color: 'var(--ol-red, #ef4444)',
-              fontSize: 11.5,
+              fontSize: 12,
               lineHeight: 1.5,
             }}
           >
@@ -154,7 +154,7 @@ export function Translation() {
                 background: 'rgba(239,68,68,0.12)',
                 color: 'inherit',
                 padding: '4px 10px',
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 600,
                 cursor: loading ? 'not-allowed' : 'default',
                 opacity: loading ? 0.64 : 1,
@@ -179,7 +179,7 @@ export function Translation() {
                   onClick={() => toggleWorkingLanguage(lang)}
                   style={{
                     padding: '6px 12px',
-                    fontSize: 12.5,
+                    fontSize: 13,
                     fontWeight: checked ? 600 : 500,
                     border: 0,
                     borderRadius: 999,
@@ -204,7 +204,7 @@ export function Translation() {
             <span
               style={{
                 padding: '2px 8px',
-                fontSize: 10.5,
+                fontSize: 12,
                 fontWeight: 600,
                 letterSpacing: '0.04em',
                 borderRadius: 999,
@@ -243,7 +243,7 @@ export function Translation() {
         {/* 3. 使用方法 */}
         <Card>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{t('translation.howto.title')}</div>
-          <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: 'var(--ol-ink-2)', lineHeight: 1.7 }}>
+          <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--ol-ink-2)', lineHeight: 1.7 }}>
             <li>{t('translation.howto.step1', { trigger: triggerLabel })}</li>
             <li>{t('translation.howto.step2', { trigger: triggerLabel })}</li>
             <li>{t('translation.howto.step3', { shortcut: translationHotkeyLabel })}</li>

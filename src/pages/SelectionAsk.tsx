@@ -100,12 +100,12 @@ export function SelectionAsk() {
             alignItems: 'center',
             gap: 12,
             padding: '8px 14px',
-            borderRadius: 10,
+            borderRadius: 8,
             background: 'rgba(0,0,0,0.04)',
             border: '0.5px solid var(--ol-line)',
           }}
         >
-          <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ol-ink-2)' }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--ol-ink-2)' }}>
             {t('selectionAsk.history.title')}
           </span>
           <button
@@ -144,7 +144,7 @@ export function SelectionAsk() {
         {/* 2. 使用方法 */}
         <Card>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{t('selectionAsk.howto.title')}</div>
-          <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: 'var(--ol-ink-2)', lineHeight: 1.7 }}>
+          <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--ol-ink-2)', lineHeight: 1.7 }}>
             <li>{t('selectionAsk.howto.step1', { hotkey: enabled ? currentLabel : defaultHotkeyLabel })}</li>
             <li>{t('selectionAsk.howto.step2')}</li>
             <li>{t('selectionAsk.howto.step3', { recordHotkey: recordHotkeyLabel })}</li>

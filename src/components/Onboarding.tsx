@@ -238,7 +238,7 @@ export function Onboarding({ onComplete, onOpenSettings }: OnboardingProps) {
           width: 560,
           padding: 32,
           background: 'var(--ol-surface)',
-          borderRadius: 14,
+          borderRadius: 12,
           border: '0.5px solid var(--ol-line)',
           boxShadow: 'var(--ol-shadow-lg)',
         }}
@@ -248,10 +248,10 @@ export function Onboarding({ onComplete, onOpenSettings }: OnboardingProps) {
             style={{
               width: 52,
               height: 52,
-              borderRadius: 13,
+              borderRadius: 12,
               background: 'linear-gradient(135deg, #0a0a0b 0%, #2563eb 100%)',
               color: '#fff',
-              fontSize: 15,
+              fontSize: 16,
               fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
@@ -261,8 +261,8 @@ export function Onboarding({ onComplete, onOpenSettings }: OnboardingProps) {
             WI
           </div>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 600 }}>{t('onboarding.welcome')}</div>
-            <div style={{ fontSize: 12.5, color: 'var(--ol-ink-3)', marginTop: 2 }}>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>{t('onboarding.welcome')}</div>
+            <div style={{ fontSize: 13, color: 'var(--ol-ink-3)', marginTop: 2 }}>
               {t('onboarding.intro')}
             </div>
           </div>
@@ -291,7 +291,7 @@ export function Onboarding({ onComplete, onOpenSettings }: OnboardingProps) {
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ol-blue)', marginBottom: 8 }}>
             {t('onboarding.stepLabel', { current: step + 1, total: steps.length })}
           </div>
-          <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>{current.title}</div>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>{current.title}</div>
           {current.body}
         </div>
 
@@ -355,7 +355,7 @@ function PermissionRow({ label, desc, status, actionLabel, disabled, onAction }:
 
 const copyStyle: CSSProperties = {
   margin: 0,
-  fontSize: 12.5,
+  fontSize: 13,
   color: 'var(--ol-ink-3)',
   lineHeight: 1.65,
 };
@@ -371,7 +371,7 @@ const noteStyle: CSSProperties = {
 
 const primaryButtonStyle: CSSProperties = {
   padding: '7px 14px',
-  fontSize: 12.5,
+  fontSize: 13,
   fontWeight: 500,
   fontFamily: 'inherit',
   border: '0.5px solid transparent',
@@ -383,7 +383,7 @@ const primaryButtonStyle: CSSProperties = {
 
 const secondaryButtonStyle: CSSProperties = {
   padding: '7px 14px',
-  fontSize: 12.5,
+  fontSize: 13,
   fontWeight: 500,
   fontFamily: 'inherit',
   border: '0.5px solid var(--ol-line-strong)',
