@@ -44,6 +44,8 @@ mod windows_ime_profile;
 mod windows_ime_protocol;
 mod windows_ime_session;
 
+#[cfg(target_os = "windows")]
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "macos")]
 use std::sync::mpsc;
@@ -56,6 +58,8 @@ const LOG_ROTATE_LIMIT_BYTES: u64 = 10 * 1024 * 1024;
 /// 让用户拖动后的位置在 hide → show 之间得以保持。详见 issue #118 v2。
 static QA_WINDOW_POSITIONED: AtomicBool = AtomicBool::new(false);
 static TRAY_MICROPHONE_WATCHER_STOPPING: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "windows")]
+static MAIN_AUTO_MINIMIZE_SUPPRESS_UNTIL_MS: AtomicU64 = AtomicU64::new(0);
 use tauri::menu::{
     CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder, Submenu, SubmenuBuilder,
 };
@@ -153,11 +157,12 @@ pub fn run() {
             // Windows 这里关掉 native chrome 让 React 端 WinTitleBar 接管。
             if let Some(main) = app.get_webview_window("main") {
                 let app_for_close = app.handle().clone();
-                main.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                main.on_window_event(move |event| match event {
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
                         api.prevent_close();
                         hide_main_window(&app_for_close);
                     }
+                    _ => {}
                 });
 
                 #[cfg(target_os = "macos")]
@@ -205,8 +210,8 @@ pub fn run() {
                 let suppress_show = !force_show && coordinator.prefs().get().start_minimized;
                 if suppress_show {
                     log::info!("[main] start_minimized=true → 跳过初始 show，等用户点托盘");
-                } else if let Err(e) = main.show() {
-                    log::warn!("[main] initial show failed: {e}");
+                } else {
+                    show_main_window(app.handle());
                 }
             }
 
@@ -413,13 +418,21 @@ pub fn run() {
                         hide_main_window(app);
                     }
                     #[cfg(target_os = "windows")]
+                    if matches!(event, tauri::WindowEvent::Focused(false)) {
+                        schedule_main_minimize_after_focus_loss(app);
+                    }
+                    #[cfg(target_os = "windows")]
                     if matches!(
                         event,
                         tauri::WindowEvent::Resized(_)
                             | tauri::WindowEvent::ScaleFactorChanged { .. }
+                            | tauri::WindowEvent::Focused(true)
                     ) {
                         if let Some(main) = app.get_webview_window("main") {
                             apply_windows_rounded_frame(&main);
+                        }
+                        if matches!(event, tauri::WindowEvent::Focused(true)) {
+                            schedule_windows_rounded_frame(app);
                         }
                     }
                 }
@@ -686,16 +699,140 @@ fn handle_style_tray_menu_event(app: &AppHandle, id: &str) -> bool {
 }
 
 #[cfg(target_os = "windows")]
+fn monotonic_millis() -> u64 {
+    use std::sync::OnceLock;
+    use std::time::Instant;
+
+    static STARTED_AT: OnceLock<Instant> = OnceLock::new();
+    STARTED_AT
+        .get_or_init(Instant::now)
+        .elapsed()
+        .as_millis()
+        .min(u64::MAX as u128) as u64
+}
+
+#[cfg(target_os = "windows")]
+fn suppress_main_auto_minimize_for_explicit_show() {
+    // Selecting a tray item briefly gives Explorer the foreground even though the
+    // command is already restoring this window. Keep that transient notification
+    // from undoing the user's explicit request to show the app.
+    const EXPLICIT_SHOW_GRACE_MS: u64 = 750;
+    MAIN_AUTO_MINIMIZE_SUPPRESS_UNTIL_MS.store(
+        monotonic_millis().saturating_add(EXPLICIT_SHOW_GRACE_MS),
+        Ordering::Relaxed,
+    );
+}
+
+#[cfg(target_os = "windows")]
+fn main_auto_minimize_is_suppressed() -> bool {
+    monotonic_millis() < MAIN_AUTO_MINIMIZE_SUPPRESS_UNTIL_MS.load(Ordering::Relaxed)
+}
+
+#[cfg(target_os = "windows")]
+fn should_minimize_main_after_focus_loss(
+    explicit_show_pending: bool,
+    main_process_id: u32,
+    foreground_process_id: u32,
+    main_visible: bool,
+    main_minimized: bool,
+) -> bool {
+    !explicit_show_pending
+        && main_process_id != 0
+        && foreground_process_id != 0
+        && main_process_id != foreground_process_id
+        && main_visible
+        && !main_minimized
+}
+
+#[cfg(target_os = "windows")]
+fn schedule_main_minimize_after_focus_loss<R: Runtime>(app: &AppHandle<R>) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        // Focus notifications can arrive midway through a tray/single-instance restore.
+        // Let that handoff settle, then make the visibility decision on Tauri's main thread.
+        std::thread::sleep(Duration::from_millis(75));
+        let app_for_main_thread = app.clone();
+        if let Err(error) = app.run_on_main_thread(move || {
+            if let Some(main) = app_for_main_thread.get_webview_window("main") {
+                if should_minimize_main_for_current_foreground(&main) {
+                    log::info!(
+                        "[main] focus moved outside the app; minimizing main window to keep its taskbar entry"
+                    );
+                    if let Err(error) = main.minimize() {
+                        log::warn!("[main] focus-loss minimize failed: {error}");
+                    }
+                }
+            }
+        }) {
+            log::warn!("[main] dispatch focus-loss minimize failed: {error}");
+        }
+    });
+}
+
+#[cfg(target_os = "windows")]
+fn should_minimize_main_for_current_foreground<R: Runtime>(
+    window: &tauri::WebviewWindow<R>,
+) -> bool {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+
+    let handle = match window.window_handle().map(|handle| handle.as_raw()) {
+        Ok(RawWindowHandle::Win32(handle)) => handle,
+        _ => return false,
+    };
+    let main = HWND(handle.hwnd.get() as *mut core::ffi::c_void);
+    let foreground = unsafe { GetForegroundWindow() };
+    if foreground.0.is_null() || foreground == main {
+        return false;
+    }
+
+    let mut main_process_id = 0;
+    let mut foreground_process_id = 0;
+    unsafe {
+        GetWindowThreadProcessId(main, Some(&mut main_process_id));
+        GetWindowThreadProcessId(foreground, Some(&mut foreground_process_id));
+    }
+
+    should_minimize_main_after_focus_loss(
+        main_auto_minimize_is_suppressed(),
+        main_process_id,
+        foreground_process_id,
+        window.is_visible().unwrap_or(false),
+        window.is_minimized().unwrap_or(false),
+    )
+}
+
+#[cfg(target_os = "windows")]
+fn schedule_windows_rounded_frame<R: Runtime>(app: &AppHandle<R>) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        // Windows restores a minimized window asynchronously. The immediate
+        // focus/resize callbacks can still observe the 160x28 iconic bounds,
+        // so settle once more after the normal window rectangle is back.
+        std::thread::sleep(Duration::from_millis(150));
+        let app_for_main_thread = app.clone();
+        if let Err(error) = app.run_on_main_thread(move || {
+            if let Some(main) = app_for_main_thread.get_webview_window("main") {
+                apply_windows_rounded_frame(&main);
+            }
+        }) {
+            log::warn!("[main] dispatch delayed frame restore failed: {error}");
+        }
+    });
+}
+
+#[cfg(target_os = "windows")]
 fn apply_windows_rounded_frame<R: Runtime>(window: &tauri::WebviewWindow<R>) {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    use windows::Win32::Foundation::{BOOL, HWND, RECT};
+    use windows::Win32::Foundation::{BOOL, HWND, POINT, RECT};
     use windows::Win32::Graphics::Dwm::{
         DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
     };
-    use windows::Win32::Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn, HRGN};
+    use windows::Win32::Graphics::Gdi::{ClientToScreen, CreateRoundRectRgn, SetWindowRgn, HRGN};
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetWindowLongW, GetWindowRect, SetWindowLongW, SetWindowPos, GWL_STYLE, SWP_FRAMECHANGED,
-        SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WS_CAPTION, WS_THICKFRAME,
+        GetClientRect, GetWindowLongW, GetWindowRect, SetWindowLongW, SetWindowPos, GWL_STYLE,
+        SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WS_CAPTION, WS_THICKFRAME,
     };
 
     let handle = match window.window_handle().map(|h| h.as_raw()) {
@@ -711,7 +848,17 @@ fn apply_windows_rounded_frame<R: Runtime>(window: &tauri::WebviewWindow<R>) {
     };
     let hwnd = HWND(handle.hwnd.get() as *mut core::ffi::c_void);
 
+    // A minimized Win32 window reports the taskbar icon rectangle (typically
+    // 160x28) as its window bounds. Never replace the real client crop with that
+    // transient region, otherwise restoring exposes the native caption/frame.
+    if window.is_minimized().unwrap_or(false) {
+        return;
+    }
+
     unsafe {
+        // Acrylic on Windows 11 needs the resize frame style. Keep that style so the
+        // KIMI glass and Tauri's native edge dragging continue to work, then clip the
+        // non-client frame out of the visible region below.
         let style = GetWindowLongW(hwnd, GWL_STYLE);
         let desired_style = (style | WS_THICKFRAME.0 as i32) & !(WS_CAPTION.0 as i32);
         if style != desired_style {
@@ -765,7 +912,29 @@ fn apply_windows_rounded_frame<R: Runtime>(window: &tauri::WebviewWindow<R>) {
         if width <= 0 || height <= 0 {
             return;
         }
-        let region = CreateRoundRectRgn(0, 0, width + 1, height + 1, 18, 18);
+
+        let mut client_rect = RECT::default();
+        if let Err(e) = GetClientRect(hwnd, &mut client_rect) {
+            log::warn!("[main] read client rect for frame crop failed: {e}");
+            return;
+        }
+        let mut client_origin = POINT::default();
+        if !ClientToScreen(hwnd, &mut client_origin).as_bool() {
+            log::warn!("[main] locate client surface for frame crop failed");
+            return;
+        }
+        let frame_left = (client_origin.x - rect.left).max(0);
+        let frame_top = (client_origin.y - rect.top).max(0);
+        let frame_right = (rect.right - client_origin.x - client_rect.right).max(0);
+        let frame_bottom = (rect.bottom - client_origin.y - client_rect.bottom).max(0);
+        let region = CreateRoundRectRgn(
+            frame_left,
+            frame_top,
+            width - frame_right + 1,
+            height - frame_bottom + 1,
+            18,
+            18,
+        );
         if region.is_invalid() {
             log::warn!("[main] create rounded window region failed");
             return;
@@ -881,9 +1050,22 @@ pub fn log_dir_path() -> std::path::PathBuf {
 pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
     activate_window_mode(app);
     if let Some(w) = app.get_webview_window("main") {
-        let _ = w.show();
-        let _ = w.unminimize();
-        let _ = w.set_focus();
+        #[cfg(target_os = "windows")]
+        suppress_main_auto_minimize_for_explicit_show();
+        if let Err(err) = w.unminimize() {
+            log::warn!("[main] unminimize failed: {err}");
+        }
+        if let Err(err) = w.show() {
+            log::warn!("[main] show failed: {err}");
+        }
+        if let Err(err) = w.set_focus() {
+            log::warn!("[main] focus failed: {err}");
+        }
+        #[cfg(target_os = "windows")]
+        {
+            apply_windows_rounded_frame(&w);
+            schedule_windows_rounded_frame(app);
+        }
     }
     activate_app(app);
 }
@@ -897,6 +1079,8 @@ pub(crate) fn request_microphone_from_foreground<R: Runtime>(
 }
 
 fn hide_main_window<R: Runtime>(app: &AppHandle<R>) {
+    #[cfg(target_os = "windows")]
+    MAIN_AUTO_MINIMIZE_SUPPRESS_UNTIL_MS.store(0, Ordering::Relaxed);
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.hide();
     }
@@ -1237,6 +1421,8 @@ fn capsule_height_for_qa() -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "windows")]
+    use super::should_minimize_main_after_focus_loss;
     use super::{
         capsule_height_for_qa, capsule_visual_height, capsule_window_bounds, parse_tray_style_id,
         rotate_log_if_too_large, tray_style_menu_enabled, tray_style_menu_entries,
@@ -1244,6 +1430,26 @@ mod tests {
     };
     use crate::types::{PolishMode, StylePack, StylePackCatalogSnapshot, StylePackKind};
     use std::io::Write;
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn explicit_show_pending_survives_transient_focus_loss() {
+        assert!(!should_minimize_main_after_focus_loss(
+            true, 10, 20, true, false
+        ));
+        assert!(should_minimize_main_after_focus_loss(
+            false, 10, 20, true, false
+        ));
+        assert!(!should_minimize_main_after_focus_loss(
+            false, 10, 10, true, false
+        ));
+        assert!(!should_minimize_main_after_focus_loss(
+            false, 10, 20, false, false
+        ));
+        assert!(!should_minimize_main_after_focus_loss(
+            false, 10, 20, true, true
+        ));
+    }
 
     #[test]
     fn tray_style_menu_is_windows_only() {

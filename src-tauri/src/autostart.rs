@@ -54,6 +54,46 @@ fn windows_run_command(exe_path: &str) -> String {
     format!(r#""{}""#, exe_path.trim().trim_matches('"'))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WindowsAutostartRepair {
+    Preserve,
+    ReplaceWithCurrent,
+    DeleteInvalid,
+}
+
+fn is_self_contained_windows_exe(path: &str) -> bool {
+    let normalized = normalize_path(path);
+    normalized.ends_with(".exe") && !normalized.contains("\\target\\debug\\")
+}
+
+fn decide_windows_autostart_repair(
+    raw_value: Option<&str>,
+    current_exe: &str,
+) -> WindowsAutostartRepair {
+    let Some(raw_value) = raw_value else {
+        return WindowsAutostartRepair::Preserve;
+    };
+    let registered_path = extract_windows_run_exe_path(raw_value);
+    let current_is_self_contained = is_self_contained_windows_exe(current_exe);
+    let registered_is_self_contained = registered_path
+        .as_deref()
+        .map(is_self_contained_windows_exe)
+        .unwrap_or(false);
+
+    if !current_is_self_contained {
+        return if registered_is_self_contained {
+            WindowsAutostartRepair::Preserve
+        } else {
+            WindowsAutostartRepair::DeleteInvalid
+        };
+    }
+
+    match registered_path {
+        Some(path) if paths_match(&path, current_exe) => WindowsAutostartRepair::Preserve,
+        _ => WindowsAutostartRepair::ReplaceWithCurrent,
+    }
+}
+
 fn current_exe_path() -> Result<String, String> {
     std::env::current_exe()
         .map_err(|e| format!("读取当前程序路径失败: {e}"))
@@ -94,6 +134,18 @@ mod platform {
         let expected_path = current_exe_path()?;
         let raw_value = read_run_value()?;
         let mut status = classify_windows_run_value(raw_value.as_deref(), &expected_path);
+        if !is_self_contained_windows_exe(&expected_path) {
+            let registered_is_self_contained = status
+                .registered_path
+                .as_deref()
+                .map(is_self_contained_windows_exe)
+                .unwrap_or(false);
+            status.enabled = raw_value.is_some() && registered_is_self_contained;
+            status.stale = raw_value.is_some() && !registered_is_self_contained;
+            if registered_is_self_contained {
+                status.expected_path = status.registered_path.clone().unwrap_or(expected_path);
+            }
+        }
         if status.enabled && !task_manager_enabled().unwrap_or(true) {
             status.enabled = false;
         }
@@ -103,6 +155,9 @@ mod platform {
     pub fn set_autostart_enabled(enabled: bool) -> Result<AutostartStatus, String> {
         if enabled {
             let expected_path = current_exe_path()?;
+            if !is_self_contained_windows_exe(&expected_path) {
+                return Err("开发调试版依赖本地前端服务，不能注册为 Windows 开机启动项".to_string());
+            }
             write_run_value(&expected_path)?;
             write_startup_approved_enabled()?;
         } else {
@@ -115,14 +170,27 @@ mod platform {
         let expected_path = current_exe_path()?;
         let raw_value = read_run_value()?;
         let status = classify_windows_run_value(raw_value.as_deref(), &expected_path);
-        if status.enabled && status.stale && task_manager_enabled().unwrap_or(true) {
-            write_run_value(&expected_path)?;
-            write_startup_approved_enabled()?;
-            log::info!(
-                "[autostart] repaired stale Windows Run entry: {:?} -> {}",
-                status.registered_path,
-                expected_path
-            );
+        match decide_windows_autostart_repair(raw_value.as_deref(), &expected_path) {
+            WindowsAutostartRepair::Preserve => {}
+            WindowsAutostartRepair::ReplaceWithCurrent
+                if task_manager_enabled().unwrap_or(true) =>
+            {
+                write_run_value(&expected_path)?;
+                write_startup_approved_enabled()?;
+                log::info!(
+                    "[autostart] repaired stale Windows Run entry: {:?} -> {}",
+                    status.registered_path,
+                    expected_path
+                );
+            }
+            WindowsAutostartRepair::DeleteInvalid => {
+                delete_run_value()?;
+                log::warn!(
+                    "[autostart] removed development-build Run entry that cannot load without Vite: {:?}",
+                    status.registered_path
+                );
+            }
+            WindowsAutostartRepair::ReplaceWithCurrent => {}
         }
         Ok(())
     }
@@ -224,6 +292,32 @@ fn platform_repair_stale_autostart_entry() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn debug_build_cannot_replace_a_self_contained_autostart_target() {
+        let installed = r#""C:\Program Files\Whisper Input\whisper-input.exe""#;
+        let debug = r"C:\Repo\src-tauri\target\debug\whisper-input.exe";
+
+        assert_eq!(
+            decide_windows_autostart_repair(Some(installed), debug),
+            WindowsAutostartRepair::Preserve
+        );
+        assert_eq!(
+            decide_windows_autostart_repair(Some(&windows_run_command(debug)), debug),
+            WindowsAutostartRepair::DeleteInvalid
+        );
+    }
+
+    #[test]
+    fn release_build_can_repair_an_older_release_autostart_target() {
+        let old = r#""C:\Program Files\Whisper Input\whisper-input.exe""#;
+        let current = r"C:\Users\User\AppData\Local\Programs\Whisper Input\whisper-input.exe";
+
+        assert_eq!(
+            decide_windows_autostart_repair(Some(old), current),
+            WindowsAutostartRepair::ReplaceWithCurrent
+        );
+    }
 
     #[test]
     fn stale_windows_run_value_is_not_usable_autostart() {

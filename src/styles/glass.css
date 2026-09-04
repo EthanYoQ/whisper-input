@@ -35,26 +35,28 @@
 
   --lg-border: rgba(30, 33, 45, 0.12);
 
-  /* 侧边栏薄纱:胶囊配方的窗口级版本 —— 低 alpha 烟熏纱,让
-     Acrylic/Mica 模糊过的壁纸色相直接透进来,导航文字靠
-     模糊本身(而非更不透明的纱)保持可读。 */
+  /* KIMI d724b2e 父玻璃基线：侧栏要有足够 tint 才能在 Acrylic 上读作
+     一张独立玻璃，而不是与桌面混成没有边界的灰雾。透明度问题由子层解决，
+     不再通过削薄父玻璃来掩盖。 */
   --lg-sidebar-top: rgb(255 255 255 / calc(0.26 * var(--lg-alpha-scale, 1)));
   --lg-sidebar-bottom: rgb(255 255 255 / calc(0.16 * var(--lg-alpha-scale, 1)));
 
-  /* Arc 式正文 sheet:顶→底微渐变 tint(同胶囊配方),真半透明。
-     与侧边栏同族、只高半档 —— 0.8 档的奶白硬板会和周边的
-     低透明度玻璃产生割裂感;正文可读性由 OS 模糊兜底。 */
+  /* KIMI d724b2e 正文父层。Overview 的内容直接落在这张 sheet 上，
+     因此父层保留 60%/52% 的材质强度，子分组不得再叠白板。 */
   --lg-sheet-top: rgb(253 254 255 / calc(0.60 * var(--lg-alpha-scale, 1)));
   --lg-sheet-bottom: rgb(244 247 252 / calc(0.52 * var(--lg-alpha-scale, 1)));
   --lg-sheet-ring: rgba(15, 23, 42, 0.05);
   --lg-sheet-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
   --lg-sheet-radius: 16px;
 
-  /* 导航选中态:抬起的白色 chip(Arc 活动标签),不再用左侧色条。 */
-  --lg-nav-active: rgb(255 255 255 / calc(0.68 * var(--lg-alpha-scale, 1)));
-  --lg-nav-active-ring: rgba(15, 23, 42, 0.06);
-  --lg-nav-active-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-  --lg-nav-hover: rgb(255 255 255 / calc(0.34 * var(--lg-alpha-scale, 1)));
+  /* 导航选中项属于 chip tier：保留轻微可见反馈，但从 KIMI 的 68% 白块
+     降为 28%→16% 的无色薄纱，不再与侧栏父玻璃累加成白板。 */
+  --lg-nav-active: linear-gradient(155deg,
+    rgb(255 255 255 / calc(0.28 * var(--lg-alpha-scale, 1))),
+    rgb(179 179 179 / calc(0.16 * var(--lg-alpha-scale, 1))));
+  --lg-nav-active-ring: rgba(15, 23, 42, 0.035);
+  --lg-nav-active-shadow: 0 2px 8px rgba(15, 23, 42, 0.045);
+  --lg-nav-hover: rgb(255 255 255 / calc(0.10 * var(--lg-alpha-scale, 1)));
 
   /* 录音胶囊(Raycast Dictation Pill 档):浮在任意桌面上都要可读,
      所以使用可读性优先的奶白半透明实体面 + 强 rim。 */
