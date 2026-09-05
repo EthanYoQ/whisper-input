@@ -29,7 +29,7 @@
 </p>
 
 <p align="center">
-  <img src="./docs/images/whisper-input-hero-zh.png" alt="轻语输入 Windows AI 语音输入软件界面总览" />
+  <img src="./docs/images/whisper-input-hero-zh.png" alt="轻语输入半透明毛玻璃桌面界面总览，展示浅色与深色主题" />
 </p>
 
 ---
@@ -76,19 +76,19 @@ flowchart LR
 
 ### 今日概览：打开软件首先看到的主界面
 
-![轻语输入今日概览主界面，展示模型状态、输入统计、使用趋势和最近识别](./docs/images/whisper-input-overview-zh.png)
+![轻语输入浅色毛玻璃今日概览，展示模型状态、输入统计、使用趋势和最近识别](./docs/images/whisper-input-overview-zh.png)
 
 ### 输出风格：同一段口述，按需要整理
 
-![轻语输入的原文、轻度润色、清晰结构和正式表达四种输出风格](./docs/images/whisper-input-output-styles.png)
+![轻语输入深色毛玻璃界面的原文、轻度润色、清晰结构和正式表达四种输出风格](./docs/images/whisper-input-output-styles.png)
 
 ### 模型设置：选择并检查语音识别与润色服务
 
-![轻语输入模型设置页面，包含云端 ASR 与 LLM 的快速配置和连通性检查](./docs/images/whisper-input-model-settings.png)
+![轻语输入浅色毛玻璃模型设置页面，包含云端 ASR 与 LLM 的快速配置和连通性检查](./docs/images/whisper-input-model-settings.png)
 
 ### 隐私与数据：清楚看到数据去向与本地控制项
 
-![轻语输入隐私与数据页面，展示音频数据、识别文本、本地历史记录和配置清理控制](./docs/images/whisper-input-privacy-data.png)
+![轻语输入深色毛玻璃隐私与数据页面，展示音频数据、识别文本、本地历史记录和配置清理控制](./docs/images/whisper-input-privacy-data.png)
 
 ---
 

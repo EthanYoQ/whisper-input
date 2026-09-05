@@ -29,7 +29,7 @@
 </p>
 
 <p align="center">
-  <img src="./docs/images/whisper-input-hero-en.png" alt="Whisper Input Windows AI voice typing interface overview" />
+  <img src="./docs/images/whisper-input-hero-en.png" alt="Whisper Input translucent glass desktop interface in light and dark themes" />
 </p>
 
 ---
@@ -78,19 +78,19 @@ Wherever your cursor is, the transcribed text appears there; if insertion fails,
 
 ### Today Overview: The First Screen When You Open the App
 
-![Whisper Input overview showing model status, dictation metrics, usage trends, and recent recognition](./docs/images/whisper-input-overview-en.png)
+![Whisper Input light glass overview showing model status, dictation metrics, usage trends, and recent recognition](./docs/images/whisper-input-overview-en.png)
 
 ### Output Styles: Shape the Same Dictation for Different Needs
 
-![Whisper Input shows Raw, Light polish, Structured, and Formal output styles side by side](./docs/images/whisper-input-output-styles-en.png)
+![Whisper Input dark glass interface showing Raw, Light polish, Structured, and Formal output styles](./docs/images/whisper-input-output-styles-en.png)
 
 ### Model Settings: Choose and Check Speech and Polishing Services
 
-![Whisper Input model settings with quick cloud ASR and LLM configuration plus connectivity checks](./docs/images/whisper-input-model-settings.png)
+![Whisper Input light glass model settings with quick cloud ASR and LLM configuration plus connectivity checks](./docs/images/whisper-input-model-settings-en.png)
 
 ### Privacy & Data: See Data Flow and Local Controls Clearly
 
-![Whisper Input privacy and data screen showing audio data, recognized text, local history, and configuration clearing controls](./docs/images/whisper-input-privacy-data.png)
+![Whisper Input dark glass privacy and data screen showing audio data, recognized text, local history, and configuration clearing controls](./docs/images/whisper-input-privacy-data-en.png)
 
 ---
 
