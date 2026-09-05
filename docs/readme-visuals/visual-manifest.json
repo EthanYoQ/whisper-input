@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "profile": "product-proof-split-v1",
+  "composition_source": "docs/readme-visuals/product-proof-split-v1.html",
+  "data_source": "docs/readme-visuals/hero-data.js",
+  "heroes": {
+    "zh": {
+      "readme": "README.md",
+      "output": "docs/images/whisper-input-hero-zh.png",
+      "ui_locale": "zh-CN",
+      "screenshots": [
+        { "path": "docs/images/whisper-input-overview-zh.png", "role": "primary", "capture_provenance": "playwright-capture", "complete_window": true, "ui_locale": "zh-CN" },
+        { "path": "docs/images/whisper-input-output-styles.png", "role": "secondary", "capture_provenance": "playwright-capture", "complete_window": true, "ui_locale": "zh-CN" },
+        { "path": "docs/images/whisper-input-model-settings.png", "role": "secondary", "capture_provenance": "playwright-capture", "complete_window": true, "ui_locale": "zh-CN" },
+        { "path": "docs/images/whisper-input-privacy-data.png", "role": "secondary", "capture_provenance": "playwright-capture", "complete_window": true, "ui_locale": "zh-CN" }
+      ]
+    },
+    "en": {
+      "readme": "README.en.md",
+      "output": "docs/images/whisper-input-hero-en.png",
+      "ui_locale": "en",
+      "screenshots": [
+        { "path": "docs/images/whisper-input-overview-en.png", "role": "primary", "capture_provenance": "playwright-capture", "complete_window": true, "ui_locale": "en" },
+        { "path": "docs/images/whisper-input-output-styles-en.png", "role": "secondary", "capture_provenance": "playwright-capture", "complete_window": true, "ui_locale": "en" },
+        { "path": "docs/images/whisper-input-model-settings-en.png", "role": "secondary", "capture_provenance": "playwright-capture", "complete_window": true, "ui_locale": "en" },
+        { "path": "docs/images/whisper-input-privacy-data-en.png", "role": "secondary", "capture_provenance": "playwright-capture", "complete_window": true, "ui_locale": "en" }
+      ]
+    }
+  }
+}
