@@ -33,6 +33,8 @@ use crate::coordinator_state::{
 use crate::diagnostics::{DiagnosticRecorderFacts, DiagnosticStore};
 use crate::hotkey::{HotkeyEvent, HotkeyMonitor};
 use crate::insertion::TextInserter;
+#[cfg(target_os = "windows")]
+use crate::insertion::{windows_insertion_transport, WindowsInsertionTransport};
 use crate::persistence::{
     CorrectionRuleStore, CredentialAccount, CredentialsVault, DictionaryStore, HistoryStore,
     PreferencesStore,
@@ -2015,6 +2017,18 @@ fn insert_via_windows_default_path(
     allow_non_tsf_insertion_fallback: bool,
     paste_shortcut: PasteShortcut,
 ) -> InsertStatus {
+    if windows_insertion_transport(polished) == WindowsInsertionTransport::Clipboard {
+        // KEYEVENTF_UNICODE sends CR/LF as Unicode code units. Rich text editors such as
+        // ChatGPT's contenteditable composer collapse those units instead of creating
+        // paragraphs. A clipboard paste preserves the LLM's exact multiline structure.
+        log::info!("[windows-insertion] preserving multiline formatting via clipboard paste");
+        return inner.inserter.insert_via_clipboard_fallback(
+            polished,
+            restore_clipboard,
+            paste_shortcut,
+        );
+    }
+
     // Ctrl+V only tells us that Windows received the shortcut. A focused target
     // can still ignore it (notably while it is handling its own shortcut or
     // clipboard operation), which previously left a misleading PasteSent
