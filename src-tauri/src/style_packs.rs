@@ -738,10 +738,10 @@ mod tests {
             .find(|pack| pack.id == BUILTIN_STRUCTURED_ID)
             .unwrap();
         assert!(structured.description.contains("Structured 3.0"));
-        assert!(structured.dictation_prompt.contains("# 场景优先级"));
+        assert!(structured.dictation_prompt.contains("# 结构策略"));
         assert!(structured.dictation_prompt.contains("# AI 编程术语纠错"));
         assert!(structured.selection_prompt.contains("AI Prompt 整理助手"));
-        assert_eq!(structured.examples.len(), 3);
+        assert_eq!(structured.examples.len(), 4);
 
         let formal = packs
             .iter()
@@ -754,6 +754,34 @@ mod tests {
             .selection_prompt
             .contains("职场与专业沟通文本编辑助手"));
         assert_eq!(formal.examples.len(), 3);
+    }
+
+    #[test]
+    fn structured_style_adapts_formatting_to_content_complexity() {
+        let structured = builtin_packs()
+            .into_iter()
+            .find(|pack| pack.id == BUILTIN_STRUCTURED_ID)
+            .unwrap();
+
+        assert!(structured
+            .dictation_prompt
+            .contains("短内容（1–2 个信息点）"));
+        assert!(structured
+            .dictation_prompt
+            .contains("中等内容（3–5 个信息点）"));
+        assert!(structured
+            .dictation_prompt
+            .contains("复杂内容（6 个以上信息点"));
+        assert!(structured
+            .dictation_prompt
+            .contains("不得为了显得结构化而机械套用编号"));
+
+        let short_example = structured
+            .examples
+            .iter()
+            .find(|example| example.input == "我现在做测试")
+            .expect("Structured must anchor short-input formatting");
+        assert_eq!(short_example.output, "测试工作\n\n我正在进行测试。");
     }
 
     #[test]
