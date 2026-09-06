@@ -402,12 +402,12 @@ fn builtin(id: &str, name: &str, base_mode: PolishMode) -> StylePack {
     StylePack {
         id: id.into(),
         name: name.into(),
-        description: String::new(),
+        description: crate::style_prompts::description(base_mode).into(),
         kind: StylePackKind::Builtin,
         base_mode,
-        dictation_prompt: String::new(),
-        selection_prompt: String::new(),
-        examples: Vec::new(),
+        dictation_prompt: crate::style_prompts::dictation(base_mode).into(),
+        selection_prompt: crate::style_prompts::selection(base_mode).into(),
+        examples: crate::style_prompts::examples(base_mode),
         created_at: String::new(),
         updated_at: String::new(),
     }
@@ -553,6 +553,47 @@ mod tests {
     }
 
     #[test]
+    fn existing_catalog_keeps_custom_style_bytes_and_prompts_unchanged() {
+        let dir = test_scratch_dir("existing-catalog");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(STYLE_PACKS_FILE);
+        let original = serde_json::json!({
+            "version": 1,
+            "activeStyleId": "custom.legacy",
+            "enabledStyleIds": ["builtin.light", "custom.legacy"],
+            "customPacks": [{
+                "id": "custom.legacy",
+                "name": "Legacy custom",
+                "description": "Keep this data",
+                "kind": "custom",
+                "baseMode": "light",
+                "dictationPrompt": "Legacy dictation {{HOTWORDS}}",
+                "selectionPrompt": "Legacy selection",
+                "examples": [{"title": "Example", "input": "in", "output": "out"}],
+                "createdAt": "2026-01-01T00:00:00Z",
+                "updatedAt": "2026-01-02T00:00:00Z"
+            }]
+        })
+        .to_string();
+        std::fs::write(&path, &original).unwrap();
+
+        let store =
+            StylePackStore::with_dir_for_tests(dir.clone(), &UserPreferences::default()).unwrap();
+        let snapshot = store.snapshot();
+        let custom = snapshot
+            .packs
+            .iter()
+            .find(|pack| pack.id == "custom.legacy")
+            .unwrap();
+        assert_eq!(snapshot.active_style_id, "custom.legacy");
+        assert_eq!(custom.dictation_prompt, "Legacy dictation {{HOTWORDS}}");
+        assert_eq!(custom.selection_prompt, "Legacy selection");
+        assert_eq!(custom.examples[0].output, "out");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
     fn deleting_active_custom_pack_falls_back_to_builtin_light() {
         let dir = test_scratch_dir("lifecycle");
         let store =
@@ -669,6 +710,50 @@ mod tests {
         let copy = store.duplicate(BUILTIN_LIGHT_ID).unwrap();
         assert_eq!(copy.kind, StylePackKind::Custom);
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn builtin_catalog_matches_the_openless_prompt_contract() {
+        let packs = builtin_packs();
+        assert_eq!(packs.len(), 4);
+
+        let raw = packs.iter().find(|pack| pack.id == BUILTIN_RAW_ID).unwrap();
+        assert!(raw.description.contains("Raw 1.0"));
+        assert!(raw.dictation_prompt.contains("仅做最小化整理"));
+        assert!(raw.selection_prompt.contains("Preserve the text exactly"));
+        assert_eq!(raw.examples.len(), 1);
+
+        let light = packs
+            .iter()
+            .find(|pack| pack.id == BUILTIN_LIGHT_ID)
+            .unwrap();
+        assert!(light.description.contains("Light 2.0"));
+        assert!(light.dictation_prompt.contains("± 20%"));
+        assert!(light.dictation_prompt.contains("工程化直陈"));
+        assert!(light.selection_prompt.contains("轻度文本润色助手"));
+        assert_eq!(light.examples.len(), 3);
+
+        let structured = packs
+            .iter()
+            .find(|pack| pack.id == BUILTIN_STRUCTURED_ID)
+            .unwrap();
+        assert!(structured.description.contains("Structured 3.0"));
+        assert!(structured.dictation_prompt.contains("# 场景优先级"));
+        assert!(structured.dictation_prompt.contains("# AI 编程术语纠错"));
+        assert!(structured.selection_prompt.contains("AI Prompt 整理助手"));
+        assert_eq!(structured.examples.len(), 3);
+
+        let formal = packs
+            .iter()
+            .find(|pack| pack.id == BUILTIN_FORMAL_ID)
+            .unwrap();
+        assert!(formal.description.contains("Formal 2.0"));
+        assert!(formal.dictation_prompt.contains("± 30%"));
+        assert!(formal.dictation_prompt.contains("B. 邮件场景"));
+        assert!(formal
+            .selection_prompt
+            .contains("职场与专业沟通文本编辑助手"));
+        assert_eq!(formal.examples.len(), 3);
     }
 
     #[test]
