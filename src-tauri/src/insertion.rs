@@ -23,8 +23,19 @@ use parking_lot::Mutex;
 use crate::types::{InsertStatus, PasteShortcut};
 
 #[cfg(target_os = "windows")]
-pub fn default_windows_insertion_uses_clipboard_first() -> bool {
-    true
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WindowsInsertionTransport {
+    Unicode,
+    Clipboard,
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn windows_insertion_transport(text: &str) -> WindowsInsertionTransport {
+    if text.contains(['\r', '\n']) {
+        WindowsInsertionTransport::Clipboard
+    } else {
+        WindowsInsertionTransport::Unicode
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -627,8 +638,19 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "windows")]
-    fn windows_default_insertion_is_clipboard_first() {
-        assert!(default_windows_insertion_uses_clipboard_first());
+    fn windows_multiline_insertion_uses_clipboard_to_preserve_formatting() {
+        assert_eq!(
+            windows_insertion_transport("测试与行程安排\n\n- 制作成品。\n- 外出理发。"),
+            WindowsInsertionTransport::Clipboard
+        );
+        assert_eq!(
+            windows_insertion_transport("测试与行程安排\r\n\r\n- 制作成品。"),
+            WindowsInsertionTransport::Clipboard
+        );
+        assert_eq!(
+            windows_insertion_transport("我现在做测试。"),
+            WindowsInsertionTransport::Unicode
+        );
     }
 
     #[test]

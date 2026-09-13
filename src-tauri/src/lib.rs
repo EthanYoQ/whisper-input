@@ -12,8 +12,8 @@
 
 mod asr;
 mod audio_mute;
-pub mod capsule_window;
 mod autostart;
+pub mod capsule_window;
 mod combo_hotkey;
 mod commands;
 mod coordinator;
@@ -40,6 +40,7 @@ mod recorder;
 mod selection;
 mod shortcut_binding;
 mod style_packs;
+mod style_prompts;
 mod types;
 mod unicode_keystroke;
 mod windows_hotkey_core;
