@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2025, macos-15]
+        os: [windows-2022, macos-15]
 
     steps:
       - uses: actions/checkout@v7
@@ -58,4 +58,27 @@ jobs:
       - run: npm run build
       - run: npm run test:frontend
       - run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
-      - run: cargo test --manifest-path src-tauri/Cargo.toml --lib -- --test-threads=1
+      - name: Run application Rust unit tests (macOS)
+        if: runner.os == 'macOS'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib -- --test-threads=1
+      - name: Run application Rust unit tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml --lib --no-run
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Tauri embeds Common Controls v6 in app binaries but not lib unit-test binaries.
+          $manifest = Join-Path $env:RUNNER_TEMP 'comctl-v6-test.xml'
+          $xml = '<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0"><dependency><dependentAssembly><assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/></dependentAssembly></dependency></assembly>'
+          [System.IO.File]::WriteAllText($manifest, $xml)
+          $tests = @(Get-ChildItem 'src-tauri/target/debug/deps' -Filter 'openless_lib-*.exe')
+          if ($tests.Count -ne 1) { throw "Expected one lib test executable, found $($tests.Count)" }
+          $mt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter mt.exe -Recurse |
+            Where-Object { $_.FullName.EndsWith('\x64\mt.exe') } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $mt) { throw 'Windows SDK mt.exe not found' }
+          & $mt.FullName -manifest $manifest "-outputresource:$($tests[0].FullName);#1"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $tests[0].FullName --test-threads=1
+          exit $LASTEXITCODE
