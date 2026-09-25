@@ -1032,7 +1032,7 @@ mod macos_ax {
                 return false;
             }
             let subrole = copy_attribute(element.0 as AxUiElementRef, b"AXSubrole\0");
-            let subrole_name = subrole.and_then(cfstring_to_rust);
+            let subrole_name = subrole.and_then(|value| cfstring_to_rust(value));
             if let Some(subrole) = subrole {
                 CFRelease(subrole);
             }
