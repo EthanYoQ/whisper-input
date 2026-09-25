@@ -117,6 +117,10 @@ impl DiagnosticTrace {
     fn strip_transcript_text(&mut self) {
         self.asr.raw_text = None;
         self.llm.final_text = None;
+        summarize_diagnostic_error(&mut self.recorder.error, "recorder error");
+        summarize_diagnostic_error(&mut self.asr.error, "asr error");
+        summarize_diagnostic_error(&mut self.asr.socket_error, "socket error");
+        summarize_diagnostic_error(&mut self.llm.error, "llm error");
     }
 
     pub fn compute_flags(&mut self) {
@@ -161,6 +165,42 @@ impl DiagnosticTrace {
 
         self.flags = flags;
     }
+}
+
+// Error strings can contain provider response bodies (including legacy transcript text).
+// Keep only categories we construct here and validated HTTP status digits.
+fn summarize_diagnostic_error(error: &mut Option<String>, fallback: &'static str) {
+    let Some(error) = error.as_mut() else {
+        return;
+    };
+    let first_line = error.lines().next().unwrap_or("").trim();
+    let summary = if let Some(rest) = first_line.strip_prefix("invalid response: status ") {
+        let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        match digits.parse::<u16>() {
+            Ok(status) if (100..=599).contains(&status) => {
+                format!("invalid response: status {status}")
+            }
+            _ => fallback.to_string(),
+        }
+    } else if line_may_contain_secret(first_line) {
+        "[REDACTED LINE]".to_string()
+    } else {
+        match first_line {
+            "emptyTranscript" => "emptyTranscript",
+            "timeout" => "timeout",
+            "WSAECONNRESET 10054" => "WSAECONNRESET 10054",
+            "asr failed" => "asr failed",
+            "network error" => "network error",
+            "parse error" => "parse error",
+            "[REDACTED LINE]" => "[REDACTED LINE]",
+            _ if first_line.starts_with("asr failed:") => "asr failed",
+            _ if first_line.starts_with("network error:") => "network error",
+            _ if first_line.starts_with("parse error:") => "parse error",
+            _ => fallback,
+        }
+        .to_string()
+    };
+    *error = summary;
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -339,7 +379,7 @@ impl DiagnosticStore {
         Ok(traces)
     }
 
-    /// Remove legacy transcript copies under the same lock used by append.
+    /// Remove legacy transcripts and error response bodies under the append lock.
     pub fn scrub_transcript_text(&self) -> Result<()> {
         let _guard = self.inner.lock.lock();
         if !self.inner.path.exists() {
@@ -799,12 +839,19 @@ mod tests {
         let path = dir.path().join("diagnostics.jsonl");
         let store = DiagnosticStore::with_path(path.clone());
         let mut trace = sample_trace();
+        trace.created_at = Utc::now().to_rfc3339();
         trace.asr.raw_text = Some("CONFIDENTIAL_REVIEW_MARKER_123".into());
         trace.llm.final_text = Some("CONFIDENTIAL_REVIEW_MARKER_123".into());
+        trace.llm.error =
+            Some("invalid response: status 500, body: CONFIDENTIAL_REVIEW_MARKER_123".into());
         store.append(trace).unwrap();
         assert!(!fs::read_to_string(&path)
             .unwrap()
             .contains("CONFIDENTIAL_REVIEW_MARKER_123"));
+        assert_eq!(
+            store.list_recent(1).unwrap()[0].llm.error.as_deref(),
+            Some("invalid response: status 500")
+        );
 
         let mut legacy = sample_trace();
         legacy.asr.raw_text = Some("CONFIDENTIAL_REVIEW_MARKER_123".into());
@@ -818,6 +865,61 @@ mod tests {
             .unwrap()
             .contains("CONFIDENTIAL_REVIEW_MARKER_123"));
         assert!(store.list_recent(1).unwrap()[0].asr.raw_text.is_none());
+    }
+
+    #[test]
+    fn legacy_error_bodies_are_removed_from_disk_listing_and_bundle() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("diagnostics.jsonl");
+        let store = DiagnosticStore::with_path(path.clone());
+        let marker = "CONFIDENTIAL_REVIEW_MARKER_123";
+        let mut single_line = sample_trace();
+        single_line.created_at = Utc::now().to_rfc3339();
+        single_line.llm.error = Some(format!("invalid response: status 500, body: {marker}"));
+        single_line.asr.error = Some(format!("asr failed: {marker}"));
+        single_line.asr.socket_error = Some(format!("receive failed: {marker}"));
+        single_line.recorder.error = Some(format!("device failed: {marker}"));
+        let mut multiline = single_line.clone();
+        multiline.trace_id = "trace-multiline".into();
+        multiline.llm.error = Some(format!("invalid response: status 502, body:\n{marker}"));
+        fs::write(
+            &path,
+            format!(
+                "{}\n{}\n",
+                serde_json::to_string(&single_line).unwrap(),
+                serde_json::to_string(&multiline).unwrap()
+            ),
+        )
+        .unwrap();
+
+        store.scrub_transcript_text().unwrap();
+        let disk = fs::read_to_string(&path).unwrap();
+        assert!(!disk.contains(marker));
+        let traces = store.list_recent(10).unwrap();
+        assert_eq!(traces.len(), 2);
+        assert_eq!(
+            traces[0].llm.error.as_deref(),
+            Some("invalid response: status 500")
+        );
+        assert_eq!(
+            traces[1].llm.error.as_deref(),
+            Some("invalid response: status 502")
+        );
+        assert_eq!(traces[0].asr.raw_chars, Some(30));
+        assert_eq!(traces[0].recorder.estimated_duration_ms, Some(33_000));
+        assert_eq!(traces[0].asr.frames_sent, Some(140));
+
+        let bundle = DiagnosticBundle::new(traces, vec![], String::new(), json!({}));
+        let exported = serde_json::to_value(bundle).unwrap();
+        assert!(!exported.to_string().contains(marker));
+        assert_eq!(exported["diagnostics"].as_array().unwrap().len(), 2);
+        assert_eq!(exported["diagnostics"][0]["asr"]["error"], "asr failed");
+        assert_eq!(
+            exported["diagnostics"][0]["llm"]["error"],
+            "invalid response: status 500"
+        );
+        assert!(exported["history"].as_array().unwrap().is_empty());
+        assert_eq!(exported["logExcerpt"], "");
     }
 
     #[test]
