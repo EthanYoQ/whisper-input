@@ -67,7 +67,7 @@ chmod +x "$tmp/bin/gh"
 
 export PATH="$tmp/bin:$PATH"
 export MOCK_RELEASE="$tmp/release.json" MOCK_WRITES="$tmp/writes" MOCK_FAIL_PUBLISH="$tmp/fail-publish"
-export CONTRACT_PATH="$repo/release-contracts/v1.5.3.json"
+export CONTRACT_PATH="$repo/release-contracts/v1.5.4.json"
 export RELEASE_TAG="$(jq -r '.release.tag' "$CONTRACT_PATH")"
 export SOURCE_COMMIT="$(jq -r '.release.sourceCommit' "$CONTRACT_PATH")"
 export GITHUB_REPOSITORY='EthanYoQ/whisper-input'
