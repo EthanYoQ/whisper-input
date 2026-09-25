@@ -3482,10 +3482,7 @@ mod tests {
             .unwrap()
             .clone()
             .expect("settings saved");
-        #[cfg(target_os = "windows")]
         assert_eq!(saved.hotkey.trigger, HotkeyTrigger::RightControl);
-        #[cfg(not(target_os = "windows"))]
-        assert_eq!(saved.hotkey.trigger, HotkeyTrigger::RightOption);
         assert_eq!(saved.hotkey.mode, prefs.hotkey.mode);
         assert_eq!(
             saved.qa_hotkey.unwrap().primary,
