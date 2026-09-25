@@ -318,7 +318,7 @@ export const zhCN = {
     hotkey: '选区润色快捷键', outputMode: '选区润色输出', previewConfirm: '预览确认', directReplace: '直接替换',
     errors: {
       selectionPolishTargetUnavailable: '无法定位原选区，请重新选择后再试。', selectionPolishSecureInput: '安全输入控件不允许读取或替换。',
-      selectionPolishUnknownTarget: '无法确认控件安全性，已阻止读取。', selectionPolishNoSelection: '未读取到选中文字。',
+      selectionPolishUnknownTarget: '无法确认控件安全性，已阻止读取。', selectionPolishNoSelection: '未读取到选中文字。', selectionPolishSelectionTooLong: '选区超过 4000 字，请缩短选区后再润色。',
       selectionPolishProviderFailed: '模型服务商生成失败。', selectionPolishCancelled: '选区润色已取消。',
       selectionPolishCopyFailed: '复制润色结果失败。', selectionPolishPreviewUnavailable: '润色预览已失效，请重新生成。',
       selectionPolishEmptyResult: '润色结果为空，未替换选区。', selectionPolishInsertFailed: '替换失败，结果仍可复制。',

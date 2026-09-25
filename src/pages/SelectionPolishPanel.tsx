@@ -10,14 +10,12 @@ import {
 } from '../lib/ipc';
 import type { SelectionPolishStatePayload } from '../lib/types';
 import { asyncSubscription } from '../lib/asyncSubscription';
+import { applySelectionPolishEvent, canCopySelectionPolish, initialSelectionPolishPreviewState } from '../lib/selectionPolishState';
 
 export function SelectionPolishPanel() {
   const { t } = useTranslation();
-  const [status, setStatus] = useState<'processing' | 'ready' | 'error'>('processing');
-  const [draft, setDraft] = useState('');
-  const [sourceApp, setSourceApp] = useState('');
-  const [errorCode, setErrorCode] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState(initialSelectionPolishPreviewState);
+  const { status, draft, sourceApp, errorCode, busy, requestId } = preview;
 
   useEffect(() => {
     if (!isTauri) return;
@@ -26,22 +24,18 @@ export function SelectionPolishPanel() {
       return listen<SelectionPolishStatePayload>(
         'selection-polish:state',
         event => {
-          const payload = event.payload;
-          setStatus(payload.kind);
-          setSourceApp(payload.sourceApp ?? '');
-          setErrorCode(payload.errorCode ?? '');
-          if (typeof payload.result === 'string') setDraft(payload.result);
-          setBusy(false);
+          setPreview(current => applySelectionPolishEvent(current, event.payload));
         },
       );
     }, error => {
       console.warn('[selection-polish] listener failed', error);
-      setStatus('error');
-      setErrorCode('listenerUnavailable');
-      setBusy(false);
+      setPreview(current => ({ ...current, status: 'error', errorCode: 'listenerUnavailable', busy: false }));
     });
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') void cancelSelectionPolish();
+      if (event.key === 'Escape') {
+        setPreview(current => ({ ...current, requestId: null }));
+        void cancelSelectionPolish();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => {
@@ -51,12 +45,12 @@ export function SelectionPolishPanel() {
   }, []);
 
   const confirm = async () => {
-    if (!draft.trim()) return;
-    setBusy(true);
+    if (status !== 'ready' || !requestId || !draft.trim() || busy) return;
+    setPreview(current => ({ ...current, busy: true }));
     try {
-      await confirmSelectionPolish(draft);
+      await confirmSelectionPolish(requestId, draft);
     } catch {
-      setBusy(false);
+      setPreview(current => ({ ...current, busy: false }));
     }
   };
 
@@ -70,7 +64,7 @@ export function SelectionPolishPanel() {
         <button
           type="button"
           aria-label={t('common.close')}
-          onClick={() => void cancelSelectionPolish()}
+          onClick={() => { setPreview(current => ({ ...current, requestId: null })); void cancelSelectionPolish(); }}
           style={iconButtonStyle}
         >
           <Icon name="x" size={16} />
@@ -85,7 +79,7 @@ export function SelectionPolishPanel() {
           <textarea
             aria-label={t('selectionPolish.result')}
             value={draft}
-            onChange={event => setDraft(event.target.value)}
+            onChange={event => setPreview(current => ({ ...current, draft: event.target.value }))}
             style={textareaStyle}
             autoFocus
           />
@@ -96,12 +90,12 @@ export function SelectionPolishPanel() {
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <PreviewButton style={actionButtonStyle} onClick={() => void cancelSelectionPolish()}>
+          <PreviewButton style={actionButtonStyle} onClick={() => { setPreview(current => ({ ...current, requestId: null })); void cancelSelectionPolish(); }}>
             {t('common.cancel')}
           </PreviewButton>
           <PreviewButton
             style={actionButtonStyle}
-            disabled={!draft.trim() || busy}
+            disabled={!canCopySelectionPolish(preview)}
             onClick={() => void copySelectionPolish(draft)}
           >
             <Icon name="copy" size={14} />
@@ -110,7 +104,7 @@ export function SelectionPolishPanel() {
           <PreviewButton
             style={actionButtonStyle}
             variant="primary"
-            disabled={!draft.trim() || busy}
+            disabled={status !== 'ready' || !requestId || !draft.trim() || busy}
             onClick={() => void confirm()}
           >
             <Icon name="check" size={14} />

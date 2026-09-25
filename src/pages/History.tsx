@@ -279,6 +279,9 @@ export function History() {
         <PreviewCard className="wi-history-transient-result">
           <div>
             <PreviewPill>{t('history.notSaved')}</PreviewPill>
+            <PreviewPill tone={statusTone(transientResult.insertStatus)}>
+              {insertStatusLabel(transientResult.insertStatus, t, os)}
+            </PreviewPill>
             <div className="wi-history-cell-text">{transientResult.finalText}</div>
           </div>
           <div className="wi-history-actions">

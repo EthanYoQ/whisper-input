@@ -295,7 +295,7 @@ export const zhTW: typeof zhCN = {
   },
   selectionPolish: {
     title: '選區潤飾', processing: '正在產生潤飾預覽…', result: '潤飾結果', replace: '替換選區', errorFallback: '選區潤飾失敗。', enable: '啟用', disable: '停用', hotkey: '選區潤飾快捷鍵', outputMode: '選區潤飾輸出', previewConfirm: '預覽確認', directReplace: '直接替換',
-    errors: { selectionPolishTargetUnavailable: '無法定位原選區，請重新選取後再試。', selectionPolishSecureInput: '安全輸入控制項不允許讀取或替換。', selectionPolishUnknownTarget: '無法確認控制項安全性，已阻止讀取。', selectionPolishNoSelection: '未讀取到選取文字。', selectionPolishProviderFailed: '模型服務商產生失敗。', selectionPolishCancelled: '選區潤飾已取消。', selectionPolishCopyFailed: '複製潤飾結果失敗。', selectionPolishPreviewUnavailable: '潤飾預覽已失效，請重新產生。', selectionPolishEmptyResult: '潤飾結果為空，未替換選區。', selectionPolishInsertFailed: '替換失敗，結果仍可複製。', selectionPolishSelectionChanged: '選區內容已變更，未執行替換。', selectionPolishTargetChanged: '焦點控制項已變更，未執行替換。' },
+    errors: { selectionPolishTargetUnavailable: '無法定位原選區，請重新選取後再試。', selectionPolishSecureInput: '安全輸入控制項不允許讀取或替換。', selectionPolishUnknownTarget: '無法確認控制項安全性，已阻止讀取。', selectionPolishNoSelection: '未讀取到選取文字。', selectionPolishSelectionTooLong: '選區超過 4000 字，請縮短選區後再潤飾。', selectionPolishProviderFailed: '模型服務商產生失敗。', selectionPolishCancelled: '選區潤飾已取消。', selectionPolishCopyFailed: '複製潤飾結果失敗。', selectionPolishPreviewUnavailable: '潤飾預覽已失效，請重新產生。', selectionPolishEmptyResult: '潤飾結果為空，未替換選區。', selectionPolishInsertFailed: '替換失敗，結果仍可複製。', selectionPolishSelectionChanged: '選區內容已變更，未執行替換。', selectionPolishTargetChanged: '焦點控制項已變更，未執行替換。' },
   },
   translation: {
     kicker: 'TRANSLATION',

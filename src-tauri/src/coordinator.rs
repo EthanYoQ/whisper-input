@@ -121,6 +121,8 @@ struct Inner {
     #[cfg(target_os = "windows")]
     prepared_windows_ime_session: Arc<Mutex<Vec<PreparedWindowsImeSessionSlot>>>,
     state: Mutex<SessionState>,
+    history_reinsert_target: Mutex<Option<crate::selection::SelectionInsertionTarget>>,
+    processing_cancel: tokio::sync::Notify,
     asr: Mutex<Option<SessionResource<ActiveAsr>>>,
     qingyu_local_asr: Arc<crate::asr::qingyu::QingyuLocalAsrService>,
     /// 本地 Qwen3-ASR 引擎缓存。跨会话复用，避免每次重加载 1.2GB+ 模型。
@@ -169,6 +171,7 @@ struct Inner {
     /// 避免取消后 LLM 仍 drain HTTP body 烧 token。详见 issue #161。
     qa_stream_cancelled: Arc<AtomicBool>,
     selection_polish_state: Mutex<Option<selection_polish::SelectionPolishSession>>,
+    selection_polish_active_request: Mutex<Option<String>>,
     /// Coordinator 退出信号。各 hotkey supervisor loop 在每轮重试 sleep 之前会检查
     /// 此 flag；为 true 时 loop 立刻 return。生产场景里 process exit 一并 reap 所有
     /// supervisor 线程，但 integration test 和未来 RunEvent::Exit 钩子需要这条
@@ -239,6 +242,8 @@ impl Coordinator {
                 correction_rules,
                 inserter: TextInserter::new(),
                 state: Mutex::new(SessionState::default()),
+                history_reinsert_target: Mutex::new(None),
+                processing_cancel: tokio::sync::Notify::new(),
                 asr: Mutex::new(None),
                 qingyu_local_asr,
                 recorder: Mutex::new(None),
@@ -262,6 +267,7 @@ impl Coordinator {
                 qa_recorder: Mutex::new(None),
                 qa_stream_cancelled: Arc::new(AtomicBool::new(false)),
                 selection_polish_state: Mutex::new(None),
+                selection_polish_active_request: Mutex::new(None),
                 local_asr_cache: Arc::new(crate::asr::local::LocalAsrCache::new()),
                 shutdown: AtomicBool::new(false),
             }),
@@ -309,6 +315,8 @@ impl Coordinator {
                 windows_ime: WindowsImeSessionController::new(),
                 prepared_windows_ime_session: Arc::new(Mutex::new(Vec::new())),
                 state: Mutex::new(SessionState::default()),
+                history_reinsert_target: Mutex::new(None),
+                processing_cancel: tokio::sync::Notify::new(),
                 asr: Mutex::new(None),
                 qingyu_local_asr,
                 recorder: Mutex::new(None),
@@ -332,6 +340,7 @@ impl Coordinator {
                 qa_recorder: Mutex::new(None),
                 qa_stream_cancelled: Arc::new(AtomicBool::new(false)),
                 selection_polish_state: Mutex::new(None),
+                selection_polish_active_request: Mutex::new(None),
                 local_asr_cache: Arc::new(crate::asr::local::LocalAsrCache::new()),
                 foundry_local_runtime,
                 shutdown: AtomicBool::new(false),
@@ -758,6 +767,23 @@ impl Coordinator {
     pub fn history(&self) -> &HistoryStore {
         &self.inner.history
     }
+    pub fn remember_history_reinsert_target(&self) {
+        use crate::selection::{
+            capture_selection_insertion_target, classify_selection_insertion_target,
+            selection_insertion_target_accepts_text, selection_insertion_target_is_external,
+            SelectionReadPermission,
+        };
+        let target = capture_selection_insertion_target();
+        *self.inner.history_reinsert_target.lock() =
+            (selection_insertion_target_is_external(&target)
+                && selection_insertion_target_accepts_text(&target)
+                && classify_selection_insertion_target(&target)
+                    == SelectionReadPermission::Allowed)
+                .then_some(target);
+    }
+    pub fn clear_history_reinsert_target(&self) {
+        self.inner.history_reinsert_target.lock().take();
+    }
     pub fn diagnostics(&self) -> &DiagnosticStore {
         &self.inner.diagnostics
     }
@@ -941,8 +967,12 @@ impl Coordinator {
         selection_polish::begin(&self.inner).await
     }
 
-    pub fn confirm_selection_polish(&self, replacement: String) -> Result<InsertStatus, String> {
-        selection_polish::replace(&self.inner, replacement)
+    pub fn confirm_selection_polish(
+        &self,
+        request_id: String,
+        replacement: String,
+    ) -> Result<InsertStatus, String> {
+        selection_polish::replace(&self.inner, request_id, replacement)
     }
 
     pub fn copy_selection_polish(&self, text: String) -> Result<(), String> {
@@ -3051,12 +3081,15 @@ async fn end_qa_session(inner: &Arc<Inner>) -> Result<(), String> {
         }
     };
 
-    if let Err(e) = asr.send_last_frame().await {
-        log::error!("[coord] QA: send last frame failed: {e}");
-    }
-    // 添加全局超时保护：防止 await_final_result() 永远挂起
     let timeout_duration = std::time::Duration::from_secs(COORDINATOR_GLOBAL_TIMEOUT_SECS);
-    let raw = match tokio::time::timeout(timeout_duration, asr.await_final_result()).await {
+    let raw = match tokio::time::timeout(timeout_duration, async {
+        if let Err(e) = asr.send_last_frame().await {
+            log::error!("[coord] QA: send last frame failed: {e}");
+        }
+        asr.await_final_result().await
+    })
+    .await
+    {
         Ok(Ok(r)) => r,
         Ok(Err(e)) => {
             log::error!("[coord] QA: await final failed: {e}");
@@ -4852,9 +4885,7 @@ fn show_capsule_window_no_activate<R: tauri::Runtime>(
 
 #[cfg(target_os = "windows")]
 fn hide_capsule_window_if_present<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
-    use windows::Win32::UI::WindowsAndMessaging::{
-        ShowWindow, SW_HIDE,
-    };
+    use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE};
 
     let Some(hwnd) = capsule_window_hwnd(window) else {
         return;

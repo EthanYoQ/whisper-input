@@ -5,6 +5,11 @@ use uuid::Uuid;
 
 use super::{active_style, capture_frontmost_app, enabled_phrases, polish_text_with_style, Inner};
 use crate::persistence::CredentialsVault;
+use crate::selection::{
+    classify_selection_insertion_target, reactivate_selection_insertion_target,
+    selection_insertion_focus_matches, selection_insertion_target_accepts_text,
+    selection_insertion_target_may_reactivate, SelectionInsertionTarget, SelectionReadPermission,
+};
 use crate::types::{DictationSession, HistoryAction, InsertStatus};
 
 fn find_source(inner: &Arc<Inner>, id: &str) -> Result<DictationSession, String> {
@@ -92,11 +97,19 @@ pub(super) fn reinsert(inner: &Arc<Inner>, history_id: String) -> Result<Dictati
     let source = find_source(inner, &history_id)?;
     let prefs = inner.prefs.get();
     let style = active_style(inner);
-    let status = inner.inserter.insert(
-        &source.final_text,
-        prefs.restore_clipboard_after_paste,
-        prefs.paste_shortcut,
-    );
+    let target = inner.history_reinsert_target.lock().take();
+    let status = if target
+        .as_ref()
+        .is_some_and(|target| history_target_is_safe(inner, target))
+    {
+        inner.inserter.insert(
+            &source.final_text,
+            prefs.restore_clipboard_after_paste,
+            prefs.paste_shortcut,
+        )
+    } else {
+        inner.inserter.copy_fallback(&source.final_text)
+    };
     let mut session = derived_session(
         &source,
         source.final_text.clone(),
@@ -110,4 +123,48 @@ pub(super) fn reinsert(inner: &Arc<Inner>, history_id: String) -> Result<Dictati
     }
     persist_if_enabled(inner, &session)?;
     Ok(session)
+}
+
+fn history_target_is_safe(inner: &Arc<Inner>, target: &SelectionInsertionTarget) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        use tauri::Manager;
+        let Some(app) = inner.app.lock().clone() else {
+            return false;
+        };
+        let Some(window) = app.get_webview_window("main") else {
+            return false;
+        };
+        let Ok(handle) = window.window_handle() else {
+            return false;
+        };
+        let RawWindowHandle::Win32(raw) = handle.as_raw() else {
+            return false;
+        };
+        let main_window = Some(raw.hwnd.get() as usize);
+        if !selection_insertion_target_may_reactivate(target, main_window) {
+            return false;
+        }
+        reactivate_selection_insertion_target(target)
+            && selection_insertion_focus_matches(target)
+            && selection_insertion_target_accepts_text(target)
+            && classify_selection_insertion_target(target) == SelectionReadPermission::Allowed
+            && selection_insertion_focus_matches(target)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = inner;
+        selection_insertion_target_may_reactivate(target, None)
+            && reactivate_selection_insertion_target(target)
+            && selection_insertion_focus_matches(target)
+            && selection_insertion_target_accepts_text(target)
+            && classify_selection_insertion_target(target) == SelectionReadPermission::Allowed
+            && selection_insertion_focus_matches(target)
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        let _ = (inner, target);
+        false
+    }
 }

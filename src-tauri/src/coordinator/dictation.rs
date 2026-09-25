@@ -1618,12 +1618,15 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
     let raw = match asr {
         ActiveAsr::Volcengine(asr) => {
             debug_assert!(uses_global_timeout);
-            if let Err(e) = asr.send_last_frame().await {
-                log::error!("[coord] send last frame failed: {e}");
-            }
-            // 添加全局超时保护：防止 await_final_result() 永远挂起
             let timeout_duration = std::time::Duration::from_secs(COORDINATOR_GLOBAL_TIMEOUT_SECS);
-            match tokio::time::timeout(timeout_duration, asr.await_final_result()).await {
+            match tokio::time::timeout(timeout_duration, async {
+                if let Err(e) = asr.send_last_frame().await {
+                    log::error!("[coord] send last frame failed: {e}");
+                }
+                asr.await_final_result().await
+            })
+            .await
+            {
                 Ok(Ok(r)) => {
                     apply_volcengine_diagnostic_snapshot(
                         &mut diagnostic_trace,
@@ -1736,14 +1739,43 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
         }
         ActiveAsr::QwenRealtime(asr) => {
             debug_assert!(uses_global_timeout);
-            if let Err(e) = asr.send_last_frame().await {
-                log::error!("[coord] Qwen realtime send last frame failed: {e}");
-            }
             let timeout_duration = std::time::Duration::from_secs(COORDINATOR_GLOBAL_TIMEOUT_SECS);
-            match tokio::time::timeout(timeout_duration, asr.await_final_result()).await {
+            let cancelled = inner.processing_cancel.notified();
+            tokio::pin!(cancelled);
+            cancelled.as_mut().enable();
+            let outcome = if inner.state.lock().cancelled {
+                None
+            } else {
+                tokio::select! {
+                    result = tokio::time::timeout(timeout_duration, async {
+                        asr.finish_and_await_result().await
+                    }) => Some(result),
+                    _ = &mut cancelled => None,
+                }
+            };
+            let outcome = match outcome {
+                Some(outcome) if !inner.state.lock().cancelled => outcome,
+                _ => {
+                    asr.cancel();
+                    restore_prepared_windows_ime_session(inner, current_session_id);
+                    {
+                        let mut state = inner.state.lock();
+                        if state.session_id == current_session_id {
+                            state.phase = SessionPhase::Idle;
+                            state.focus_target = None;
+                        }
+                    }
+                    diagnostic_trace.session.cancelled = true;
+                    diagnostic_trace.insertion.status = Some("cancelledDuringAsr".to_string());
+                    append_diagnostic_trace(inner, diagnostic_trace);
+                    return Ok(());
+                }
+            };
+            match outcome {
                 Ok(Ok(r)) => r,
                 Ok(Err(e)) => {
                     log::error!("[coord] Qwen realtime await final failed: {e}");
+                    asr.cancel();
                     append_asr_error_trace(
                         inner,
                         diagnostic_trace,
@@ -1790,11 +1822,15 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
         }
         ActiveAsr::Bailian(asr) => {
             debug_assert!(uses_global_timeout);
-            if let Err(e) = asr.send_last_frame().await {
-                log::error!("[coord] Bailian send last frame failed: {e}");
-            }
             let timeout_duration = std::time::Duration::from_secs(COORDINATOR_GLOBAL_TIMEOUT_SECS);
-            match tokio::time::timeout(timeout_duration, asr.await_final_result()).await {
+            match tokio::time::timeout(timeout_duration, async {
+                if let Err(e) = asr.send_last_frame().await {
+                    log::error!("[coord] Bailian send last frame failed: {e}");
+                }
+                asr.await_final_result().await
+            })
+            .await
+            {
                 Ok(Ok(r)) => r,
                 Ok(Err(e)) => {
                     log::error!("[coord] Bailian await final failed: {e}");
@@ -2092,10 +2128,7 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
     }
 
     if asr_transcript_has_no_speech(&raw.text) {
-        log::info!(
-            "[coord] ASR returned no-speech transcript marker: {:?}",
-            raw.text
-        );
+        log::info!("[coord] ASR returned no-speech transcript marker");
         let prefs = inner.prefs.get();
         let mode = super::active_style(inner).base_mode;
         let session = DictationSession {
@@ -2634,6 +2667,9 @@ pub(super) fn cancel_session(inner: &Arc<Inner>) {
 
     stop_recorder_for_session(inner, decision.session_id);
     cancel_asr_for_session(inner, decision.session_id);
+    if decision.phase == SessionPhase::Processing {
+        inner.processing_cancel.notify_waiters();
+    }
     restore_prepared_windows_ime_session(inner, decision.session_id);
     // Processing 阶段保持 phase=Processing 让 end_session 自己走完检查 + 收尾；
     // 其他阶段直接转 Idle。

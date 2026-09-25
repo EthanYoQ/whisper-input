@@ -427,6 +427,11 @@ pub fn run() {
                     schedule_main_minimize_after_focus_loss(app);
                 }
                 if label == "main" {
+                    #[cfg(any(target_os = "windows", target_os = "macos"))]
+                    if matches!(event, tauri::WindowEvent::Focused(false)) {
+                        app.state::<Arc<coordinator::Coordinator>>()
+                            .clear_history_reinsert_target();
+                    }
                     if let tauri::WindowEvent::CloseRequested { ref api, .. } = event {
                         api.prevent_close();
                         hide_main_window(app);
@@ -993,6 +998,9 @@ fn init_file_logger() {
     };
     let log_dir = log_dir_path();
     let _ = std::fs::create_dir_all(&log_dir);
+    if let Err(error) = discard_legacy_logs(&log_dir) {
+        eprintln!("[logger] WARN 旧日志清理失败: {error}");
+    }
     let log_file = log_dir.join("openless.log");
     if let Err(e) = rotate_log_if_too_large(&log_file) {
         eprintln!("[logger] WARN 日志轮转失败: {e}");
@@ -1012,6 +1020,21 @@ fn init_file_logger() {
         loggers.push(WriteLogger::new(LevelFilter::Info, config, file));
     }
     let _ = CombinedLogger::init(loggers);
+}
+
+fn discard_legacy_logs(log_dir: &std::path::Path) -> std::io::Result<()> {
+    let marker = log_dir.join(".body-free-logs-v1");
+    if marker.exists() {
+        return Ok(());
+    }
+    for name in ["openless.log", "openless.log.1"] {
+        match std::fs::remove_file(log_dir.join(name)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
+    std::fs::write(marker, b"1")
 }
 
 fn rotate_log_if_too_large(path: &std::path::Path) -> std::io::Result<()> {
@@ -1063,6 +1086,10 @@ pub fn log_dir_path() -> std::path::PathBuf {
 }
 
 pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    if let Some(coordinator) = app.try_state::<Arc<coordinator::Coordinator>>() {
+        coordinator.remember_history_reinsert_target();
+    }
     activate_window_mode(app);
     if let Some(w) = app.get_webview_window("main") {
         #[cfg(target_os = "windows")]
@@ -1446,9 +1473,9 @@ mod tests {
     #[cfg(target_os = "windows")]
     use super::should_minimize_main_after_focus_loss;
     use super::{
-        capsule_height_for_qa, capsule_visual_height, capsule_window_bounds, parse_tray_style_id,
-        rotate_log_if_too_large, tray_style_menu_enabled, tray_style_menu_entries,
-        LOG_ROTATE_LIMIT_BYTES,
+        capsule_height_for_qa, capsule_visual_height, capsule_window_bounds, discard_legacy_logs,
+        parse_tray_style_id, rotate_log_if_too_large, tray_style_menu_enabled,
+        tray_style_menu_entries, LOG_ROTATE_LIMIT_BYTES,
     };
     use crate::types::{PolishMode, StylePack, StylePackCatalogSnapshot, StylePackKind};
     use std::io::Write;
@@ -1632,6 +1659,27 @@ mod tests {
         assert!(std::fs::metadata(&archive).unwrap().len() > LOG_ROTATE_LIMIT_BYTES);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn legacy_log_bodies_are_discarded_before_file_logger_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["openless.log", "openless.log.1"] {
+            std::fs::write(dir.path().join(name), b"CONFIDENTIAL_REVIEW_MARKER_123").unwrap();
+        }
+        discard_legacy_logs(dir.path()).unwrap();
+        assert!(!dir.path().join("openless.log").exists());
+        assert!(!dir.path().join("openless.log.1").exists());
+        std::fs::write(
+            dir.path().join("openless.log"),
+            b"current session status=200",
+        )
+        .unwrap();
+        discard_legacy_logs(dir.path()).unwrap();
+        assert_eq!(
+            std::fs::read(dir.path().join("openless.log")).unwrap(),
+            b"current session status=200"
+        );
     }
 
     #[test]

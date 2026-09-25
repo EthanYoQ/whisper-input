@@ -320,7 +320,7 @@ export const en: typeof zhCN = {
     hotkey: 'Selection-polish shortcut', outputMode: 'Selection-polish output', previewConfirm: 'Preview and confirm', directReplace: 'Replace directly',
     errors: {
       selectionPolishTargetUnavailable: 'The original selection could not be located. Select it again and retry.', selectionPolishSecureInput: 'Secure input controls cannot be read or replaced.',
-      selectionPolishUnknownTarget: 'The control could not be classified safely, so reading was blocked.', selectionPolishNoSelection: 'No selected text was found.',
+      selectionPolishUnknownTarget: 'The control could not be classified safely, so reading was blocked.', selectionPolishNoSelection: 'No selected text was found.', selectionPolishSelectionTooLong: 'The selection exceeds 4,000 characters. Select a shorter passage and retry.',
       selectionPolishProviderFailed: 'The model provider could not generate a result.', selectionPolishCancelled: 'Selection polishing was cancelled.',
       selectionPolishCopyFailed: 'Could not copy the polished result.', selectionPolishPreviewUnavailable: 'This preview expired. Generate it again.',
       selectionPolishEmptyResult: 'The result was empty, so the selection was not replaced.', selectionPolishInsertFailed: 'Replacement failed. You can still copy the result.',
