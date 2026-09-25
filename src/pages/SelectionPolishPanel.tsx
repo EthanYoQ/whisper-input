@@ -10,7 +10,7 @@ import {
 } from '../lib/ipc';
 import type { SelectionPolishStatePayload } from '../lib/types';
 import { asyncSubscription } from '../lib/asyncSubscription';
-import { applySelectionPolishEvent, initialSelectionPolishPreviewState } from '../lib/selectionPolishState';
+import { applySelectionPolishEvent, canCopySelectionPolish, initialSelectionPolishPreviewState } from '../lib/selectionPolishState';
 
 export function SelectionPolishPanel() {
   const { t } = useTranslation();
@@ -95,7 +95,7 @@ export function SelectionPolishPanel() {
           </PreviewButton>
           <PreviewButton
             style={actionButtonStyle}
-            disabled={status !== 'ready' || !draft.trim() || busy}
+            disabled={!canCopySelectionPolish(preview)}
             onClick={() => void copySelectionPolish(draft)}
           >
             <Icon name="copy" size={14} />

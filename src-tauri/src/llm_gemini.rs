@@ -20,13 +20,12 @@ use serde_json::{json, Value};
 use crate::polish::{
     clean_polish_output, compose_polish_prompts, compose_polish_prompts_with_style,
     compose_qa_system_prompt, compose_selection_polish_prompts_with_style,
-    compose_translate_prompts, normalize_polish_layout, safe_str_slice, LLMError,
+    compose_translate_prompts, normalize_polish_layout, LLMError,
 };
 use crate::types::{ChineseScriptPreference, OutputLanguagePreference, PolishMode, QaChatMessage};
 
 const DEFAULT_TEMPERATURE: f32 = 0.3;
 const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 30;
-const BODY_PREVIEW_LIMIT: usize = 200;
 pub const GEMINI_DEFAULT_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta";
 pub const GEMINI_DEFAULT_MODEL: &str = "gemini-2.5-flash";
 
@@ -332,14 +331,12 @@ impl GeminiProvider {
             .await
             .map_err(|e| LLMError::Network(e.to_string()))?;
 
-        let preview_end = BODY_PREVIEW_LIMIT.min(body_text.len());
-        let preview = safe_str_slice(&body_text, preview_end);
-        log::info!("[llm] HTTP {} body={}", status.as_u16(), preview);
+        log::info!("[llm] HTTP {}", status.as_u16());
 
         if !status.is_success() {
             return Err(LLMError::InvalidResponse {
                 status: status.as_u16(),
-                body: preview.to_string(),
+                body: "provider returned an error".to_string(),
             });
         }
 
@@ -381,16 +378,10 @@ impl GeminiProvider {
 
         let status = response.status();
         if !status.is_success() {
-            let body_text = response
-                .text()
-                .await
-                .map_err(|e| LLMError::Network(e.to_string()))?;
-            let preview_end = BODY_PREVIEW_LIMIT.min(body_text.len());
-            let preview = safe_str_slice(&body_text, preview_end);
-            log::error!("[llm] HTTP {} body={}", status.as_u16(), preview);
+            log::error!("[llm] HTTP {}", status.as_u16());
             return Err(LLMError::InvalidResponse {
                 status: status.as_u16(),
-                body: preview.to_string(),
+                body: "provider returned an error".to_string(),
             });
         }
 
@@ -431,10 +422,7 @@ impl GeminiProvider {
                     let v: Value = match serde_json::from_str(payload) {
                         Ok(v) => v,
                         Err(e) => {
-                            log::warn!(
-                                "[llm] gemini SSE parse skip: {e}; payload preview: {}",
-                                safe_str_slice(payload, 80)
-                            );
+                            log::warn!("[llm] gemini SSE parse skip: {e}");
                             continue;
                         }
                     };

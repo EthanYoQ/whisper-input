@@ -264,6 +264,16 @@ impl QwenRealtimeASR {
             .map_err(|_| QwenRealtimeASRError::NoFinalResult)?
     }
 
+    pub async fn finish_and_await_result(&self) -> Result<RawTranscript, QwenRealtimeASRError> {
+        if !self.state.lock().session_finished {
+            // The reader may finish between this check and the send. Its result still wins.
+            if let Err(error) = self.send_last_frame().await {
+                log::warn!("[qwen-realtime-asr] final frame not sent: {error}");
+            }
+        }
+        self.await_final_result().await
+    }
+
     pub fn cancel(&self) {
         let runtime = {
             let mut st = self.state.lock();
@@ -292,7 +302,7 @@ impl QwenRealtimeASR {
 
     fn handle_text_message(&self, text: &str) -> bool {
         let Ok(value) = serde_json::from_str::<Value>(text) else {
-            log::warn!("[qwen-realtime-asr] non-json text message: {text}");
+            log::warn!("[qwen-realtime-asr] non-json text message");
             return true;
         };
         let event_type = value
@@ -613,6 +623,49 @@ async fn close_writer(writer: &SharedWriter) -> Result<(), QwenRealtimeASRError>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn disconnect_before_release_preserves_completed_or_partial_result() {
+        for completed in [true, false] {
+            let asr = QwenRealtimeASR::new(QwenRealtimeCredentials {
+                api_key: "test".into(),
+                endpoint: String::new(),
+                model: String::new(),
+            });
+            let (tx, rx) = oneshot::channel();
+            *asr.final_rx.lock() = Some(rx);
+            {
+                let mut state = asr.state.lock();
+                state.final_tx = Some(tx);
+                if completed {
+                    state.final_segments.push("heard".into());
+                } else {
+                    state.last_partial_text = "heard".into();
+                }
+            }
+            asr.finish_with_partial_or_error(QwenRealtimeASRError::NoFinalResult);
+            let result =
+                tokio::time::timeout(Duration::from_millis(100), asr.finish_and_await_result())
+                    .await
+                    .unwrap()
+                    .unwrap();
+            assert_eq!(result.text, "heard");
+        }
+    }
+
+    #[tokio::test]
+    async fn disconnect_without_text_still_fails() {
+        let asr = QwenRealtimeASR::new(QwenRealtimeCredentials {
+            api_key: "test".into(),
+            endpoint: String::new(),
+            model: String::new(),
+        });
+        let (tx, rx) = oneshot::channel();
+        *asr.final_rx.lock() = Some(rx);
+        asr.state.lock().final_tx = Some(tx);
+        asr.finish_with_partial_or_error(QwenRealtimeASRError::NoFinalResult);
+        assert!(asr.finish_and_await_result().await.is_err());
+    }
 
     #[tokio::test]
     async fn audio_bytes_are_ordered_and_complete_before_unique_finish() {

@@ -1748,8 +1748,7 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
             } else {
                 tokio::select! {
                     result = tokio::time::timeout(timeout_duration, async {
-                        asr.send_last_frame().await?;
-                        asr.await_final_result().await
+                        asr.finish_and_await_result().await
                     }) => Some(result),
                     _ = &mut cancelled => None,
                 }
@@ -2129,10 +2128,7 @@ pub(super) async fn end_session(inner: &Arc<Inner>) -> Result<(), String> {
     }
 
     if asr_transcript_has_no_speech(&raw.text) {
-        log::info!(
-            "[coord] ASR returned no-speech transcript marker: {:?}",
-            raw.text
-        );
+        log::info!("[coord] ASR returned no-speech transcript marker");
         let prefs = inner.prefs.get();
         let mode = super::active_style(inner).base_mode;
         let session = DictationSession {

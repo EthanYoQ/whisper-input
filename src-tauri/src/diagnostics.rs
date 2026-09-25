@@ -186,7 +186,7 @@ impl DiagnosticBundle {
                 .map(redact_diagnostic_trace)
                 .collect(),
             history: history.into_iter().map(redact_history_session).collect(),
-            log_excerpt: redact_secret_text(&log_excerpt),
+            log_excerpt: redact_log_text(&log_excerpt),
             settings_summary: redact_secrets(settings_summary),
             environment: serde_json::json!({
                 "version": env!("CARGO_PKG_VERSION"),
@@ -454,6 +454,26 @@ pub fn redact_secret_text(input: &str) -> String {
         .lines()
         .map(|line| {
             if line_may_contain_secret(line) {
+                "[REDACTED LINE]"
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub fn redact_log_text(input: &str) -> String {
+    input
+        .lines()
+        .map(|line| {
+            let lower = line.to_ascii_lowercase();
+            if line_may_contain_secret(line)
+                || lower.contains("body=")
+                || lower.contains("body:")
+                || lower.contains("payload preview:")
+                || lower.contains("non-json text message:")
+            {
                 "[REDACTED LINE]"
             } else {
                 line
@@ -808,6 +828,20 @@ mod tests {
             redact_secret_text(text),
             "normal line\n[REDACTED LINE]\nserver JSON ok\n[REDACTED LINE]"
         );
+    }
+
+    #[test]
+    fn legacy_response_body_is_absent_from_bundle_and_log_export() {
+        let marker = "CONFIDENTIAL_REVIEW_MARKER_123";
+        let old_log = format!("[llm] HTTP 200 body={{\"content\":\"{marker}\"}}\n[coord] invalid response: status 500, body: {marker}\n[llm] HTTP 200");
+        assert!(!redact_log_text(&old_log).contains(marker));
+        let bundle = DiagnosticBundle::new(vec![], vec![], old_log, json!({}));
+        let value = serde_json::to_value(bundle).unwrap();
+        assert!(!value.to_string().contains(marker));
+        assert!(value["logExcerpt"]
+            .as_str()
+            .unwrap()
+            .contains("[llm] HTTP 200"));
     }
 
     #[test]

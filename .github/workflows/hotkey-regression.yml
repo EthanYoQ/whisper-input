@@ -7,6 +7,16 @@ on:
   pull_request:
 
 jobs:
+  release-promotion-regression:
+    name: Release promotion retry regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - run: bash scripts/test-release-promotion-retry.sh
+
   windows-hotkey:
     name: Windows hotkey regression
     runs-on: windows-2022

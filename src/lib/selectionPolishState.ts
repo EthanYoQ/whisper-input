@@ -36,9 +36,13 @@ export function applySelectionPolishEvent(
   return {
     ...state,
     status: payload.kind,
-    draft: payload.kind === 'ready' && typeof payload.result === 'string' ? payload.result : state.draft,
+    draft: typeof payload.result === 'string' ? payload.result : state.draft,
     sourceApp: payload.sourceApp ?? '',
     errorCode: payload.errorCode ?? '',
     busy: false,
   };
+}
+
+export function canCopySelectionPolish(state: SelectionPolishPreviewState): boolean {
+  return state.status !== 'processing' && !!state.requestId && !!state.draft.trim() && !state.busy;
 }

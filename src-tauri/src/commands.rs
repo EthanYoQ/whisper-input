@@ -2626,9 +2626,9 @@ pub fn export_error_log(target_path: String) -> Result<(), String> {
     if !src.exists() {
         return Err(format!("日志文件不存在：{}", src.display()));
     }
-    std::fs::copy(&src, std::path::Path::new(&target_path))
-        .map(|_| ())
-        .map_err(|e| format!("复制日志失败：{}", e))
+    let log = std::fs::read_to_string(&src).map_err(|e| format!("读取日志失败：{e}"))?;
+    std::fs::write(&target_path, crate::diagnostics::redact_log_text(&log))
+        .map_err(|e| format!("写入日志失败：{e}"))
 }
 
 #[tauri::command]
@@ -2645,7 +2645,8 @@ pub fn export_diagnostic_bundle(
     let diagnostics = diagnostics
         .list_recent(limit)
         .map_err(|e| format!("读取诊断记录失败：{e:#}"))?;
-    let mut history = if coord.prefs().get().history_enabled {
+    let prefs = coord.prefs().get();
+    let mut history = if prefs.history_enabled {
         coord
             .history()
             .list()
@@ -2654,10 +2655,12 @@ pub fn export_diagnostic_bundle(
         Vec::new()
     };
     history.truncate(limit.min(history.len()));
-    let settings_summary = diagnostic_settings_summary(&coord.prefs().get())
-        .map_err(|e| format!("读取设置摘要失败：{e}"))?;
-    let log_excerpt = read_log_tail(&crate::log_dir_path().join("openless.log"), 128 * 1024)
-        .map_err(|e| format!("读取日志尾部失败：{e:#}"))?;
+    let settings_summary =
+        diagnostic_settings_summary(&prefs).map_err(|e| format!("读取设置摘要失败：{e}"))?;
+    let log_excerpt = diagnostic_log_excerpt(
+        prefs.history_enabled,
+        &crate::log_dir_path().join("openless.log"),
+    )?;
     let bundle = DiagnosticBundle::new(diagnostics, history, log_excerpt, settings_summary);
     write_diagnostic_bundle_zip(&bundle, &target_path)
         .map_err(|e| format!("写入诊断包失败：{e:#}"))?;
@@ -2687,6 +2690,13 @@ fn normalize_diagnostic_limit(recent_limit: Option<usize>) -> usize {
     recent_limit.unwrap_or(200).clamp(1, 200)
 }
 
+fn diagnostic_log_excerpt(history_enabled: bool, path: &std::path::Path) -> Result<String, String> {
+    if !history_enabled {
+        return Ok(String::new());
+    }
+    read_log_tail(path, 128 * 1024).map_err(|e| format!("读取日志尾部失败：{e:#}"))
+}
+
 fn diagnostic_settings_summary(prefs: &UserPreferences) -> Result<Value, serde_json::Error> {
     serde_json::to_value(prefs)
 }
@@ -2701,14 +2711,14 @@ mod tests {
     use super::{
         active_asr_is_keyless_for_validation, active_foundry_model_from_prefs,
         asr_configured_for_provider, asr_transcriptions_url, credentials_status_from_snapshot,
-        doubao_llm_provider_config, doubao_llm_validation_config, fetch_provider_models,
-        gemini_llm_provider_config, gemini_llm_validation_config, llm_configured_for_provider,
-        llm_endpoint_requires_key, local_asr_release_plan_for_provider, models_url,
-        normalize_diagnostic_limit, normalize_foundry_language_hint, parse_gemini_model_ids,
-        parse_latest_beta_from_atom, parse_model_ids, persist_settings, qwen_llm_provider_config,
-        qwen_llm_validation_config, release_foundry_runtime_if_inactive,
-        validate_asr_transcription, validate_foundry_model_alias, ModelListProtocol,
-        ProviderConfig, SettingsWriter,
+        diagnostic_log_excerpt, doubao_llm_provider_config, doubao_llm_validation_config,
+        fetch_provider_models, gemini_llm_provider_config, gemini_llm_validation_config,
+        llm_configured_for_provider, llm_endpoint_requires_key,
+        local_asr_release_plan_for_provider, models_url, normalize_diagnostic_limit,
+        normalize_foundry_language_hint, parse_gemini_model_ids, parse_latest_beta_from_atom,
+        parse_model_ids, persist_settings, qwen_llm_provider_config, qwen_llm_validation_config,
+        release_foundry_runtime_if_inactive, validate_asr_transcription,
+        validate_foundry_model_alias, ModelListProtocol, ProviderConfig, SettingsWriter,
     };
     use crate::persistence::CredentialsSnapshot;
     use crate::types::{
@@ -2737,6 +2747,17 @@ mod tests {
         assert_eq!(normalize_diagnostic_limit(Some(0)), 1);
         assert_eq!(normalize_diagnostic_limit(Some(50)), 50);
         assert_eq!(normalize_diagnostic_limit(Some(500)), 200);
+    }
+
+    #[test]
+    fn history_disabled_diagnostic_export_omits_existing_log_body() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("openless.log");
+        std::fs::write(&log, "[llm] HTTP 200 body=CONFIDENTIAL_REVIEW_MARKER_123").unwrap();
+        assert_eq!(diagnostic_log_excerpt(false, &log).unwrap(), "");
+        assert!(diagnostic_log_excerpt(true, &log)
+            .unwrap()
+            .contains("CONFIDENTIAL_REVIEW_MARKER_123"));
     }
 
     #[test]
@@ -3912,6 +3933,22 @@ mod tests {
             assert!(!request_text
                 .to_ascii_lowercase()
                 .contains("authorization: bearer"));
+            let header_end = request.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+            let content_length: usize = request_text
+                .lines()
+                .find_map(|line| {
+                    line.to_ascii_lowercase()
+                        .strip_prefix("content-length:")
+                        .and_then(|value| value.trim().parse().ok())
+                })
+                .unwrap();
+            while request.len() < header_end + content_length {
+                let n = stream.read(&mut buf).unwrap();
+                if n == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buf[..n]);
+            }
 
             let body = r#"{"text":"ok"}"#;
             let response = format!(

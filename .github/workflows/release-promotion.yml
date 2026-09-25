@@ -132,6 +132,7 @@ jobs:
         shell: bash
         env:
           RELEASE_TAG: ${{ steps.contract.outputs.release_tag }}
+          SOURCE_COMMIT: ${{ steps.contract.outputs.source_commit }}
         run: |
           set -euo pipefail
           version="${RELEASE_TAG#v}"
@@ -160,10 +161,20 @@ jobs:
           这个列表统一展示 GitHub Release 下载文件，不代表已新增或验证应用内自动更新。请下载与自己系统匹配的文件。
           EOF
           sed -i "s/__VERSION__/$version/g" release-notes.zh-CN.md
+          contract_digest="$(sha256sum "$CONTRACT_PATH" | cut -d' ' -f1)"
+          assets_digest="$(sha256sum promotion-evidence/asset-sha256s.txt | cut -d' ' -f1)"
+          marker="<!-- whisper-input-promotion:v1 tag=$RELEASE_TAG source=$SOURCE_COMMIT contract=$contract_digest assets=$assets_digest -->"
+          printf '\n%s\n' "$marker" >> release-notes.zh-CN.md
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            release_json="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,isPrerelease)"
-            test "$(jq -r '.isDraft' <<<"$release_json")" = "false"
+            release_json="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets,body,isDraft,isPrerelease,targetCommitish)"
             test "$(jq -r '.isPrerelease' <<<"$release_json")" = "false"
+            if [ "$(jq -r '.isDraft' <<<"$release_json")" = "true" ]; then
+              test "$(jq -r '.targetCommitish' <<<"$release_json")" = "$SOURCE_COMMIT"
+              jq -r '.body' <<<"$release_json" | grep -Fx -- "$marker" >/dev/null || {
+                echo "Existing draft was not created from this exact promotion contract" >&2
+                exit 1
+              }
+            fi
             expected="$(find release-assets -maxdepth 1 -type f -printf '%f\n' | sort)"
             unexpected="$(comm -23 <(jq -r '.assets[].name' <<<"$release_json" | sort) <(printf '%s\n' "$expected"))"
             if [ -n "$unexpected" ]; then
@@ -189,7 +200,7 @@ jobs:
             done < promotion-evidence/missing-release-assets.txt
             gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "Whisper Input $RELEASE_TAG" --notes-file release-notes.zh-CN.md
           else
-            gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --draft --title "Whisper Input $RELEASE_TAG" --notes-file release-notes.zh-CN.md
+            gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --draft --target "$SOURCE_COMMIT" --title "Whisper Input $RELEASE_TAG" --notes-file release-notes.zh-CN.md
           fi
 
           release_json="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,isPrerelease)"

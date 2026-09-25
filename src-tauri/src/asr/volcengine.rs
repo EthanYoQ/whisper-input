@@ -571,7 +571,7 @@ impl VolcengineStreamingASR {
     /// Returns `false` once the session has terminated (caller should stop reading).
     fn handle_frame(&self, data: &[u8]) -> bool {
         let Some(parsed) = frame::parse(data) else {
-            log::error!("[asr] 帧解析失败 raw={}", hex_prefix(data, 32));
+            log::error!("[asr] 帧解析失败 bytes={}", data.len());
             return true;
         };
 
@@ -581,12 +581,8 @@ impl VolcengineStreamingASR {
             if let Ok(json) = serde_json::from_str::<Value>(&body) {
                 self.record_server_json_facts(diagnostic_facts_from_server_json(&json));
             }
-            log::error!(
-                "[asr] error frame code={} body={}",
-                code,
-                body.chars().take(200).collect::<String>()
-            );
-            let error = format!("ASR error {}: {}", code, body);
+            log::error!("[asr] error frame code={}", code);
+            let error = format!("ASR error {}", code);
             self.record_socket_error(error.clone());
             self.signal_error(VolcengineASRError::ConnectionFailed(error));
             self.state.lock().is_connected = false;
@@ -749,14 +745,6 @@ async fn send_binary(writer: &SharedWriter, data: Vec<u8>) -> Result<(), Volceng
     sink.send(Message::Binary(data))
         .await
         .map_err(|e| VolcengineASRError::ConnectionFailed(e.to_string()))
-}
-
-fn hex_prefix(data: &[u8], n: usize) -> String {
-    data.iter()
-        .take(n)
-        .map(|b| format!("{:02x}", b))
-        .collect::<Vec<_>>()
-        .join("")
 }
 
 fn normalized_result(json: &Value) -> Option<&Value> {

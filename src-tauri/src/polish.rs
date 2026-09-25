@@ -17,7 +17,6 @@ use crate::types::{ChineseScriptPreference, OutputLanguagePreference, PolishMode
 
 const DEFAULT_TEMPERATURE: f32 = 0.3;
 const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 30;
-const BODY_PREVIEW_LIMIT: usize = 200;
 pub const CODEX_OAUTH_PROVIDER_ID: &str = "codex_oauth";
 pub const CODEX_DEFAULT_BASE_URL: &str = "https://chatgpt.com/backend-api";
 pub const CODEX_DEFAULT_MODEL: &str = "gpt-5.3-codex-spark";
@@ -692,14 +691,12 @@ impl OpenAICompatibleLLMProvider {
             .await
             .map_err(|e| LLMError::Network(e.to_string()))?;
 
-        let preview_end = BODY_PREVIEW_LIMIT.min(body_text.len());
-        let preview = safe_str_slice(&body_text, preview_end);
-        log::info!("[llm] HTTP {} body={}", status.as_u16(), preview);
+        log::info!("[llm] HTTP {}", status.as_u16());
 
         if !status.is_success() {
             return Err(LLMError::InvalidResponse {
                 status: status.as_u16(),
-                body: preview.to_string(),
+                body: "provider returned an error".to_string(),
             });
         }
 
@@ -764,17 +761,10 @@ impl OpenAICompatibleLLMProvider {
 
         let status = response.status();
         if !status.is_success() {
-            // 失败时仍把 body 读一遍方便诊断
-            let body_text = response
-                .text()
-                .await
-                .map_err(|e| LLMError::Network(e.to_string()))?;
-            let preview_end = BODY_PREVIEW_LIMIT.min(body_text.len());
-            let preview = safe_str_slice(&body_text, preview_end);
-            log::error!("[llm] HTTP {} body={}", status.as_u16(), preview);
+            log::error!("[llm] HTTP {}", status.as_u16());
             return Err(LLMError::InvalidResponse {
                 status: status.as_u16(),
-                body: preview.to_string(),
+                body: "provider returned an error".to_string(),
             });
         }
 
@@ -816,10 +806,7 @@ impl OpenAICompatibleLLMProvider {
                 let v: Value = match serde_json::from_str(payload) {
                     Ok(v) => v,
                     Err(e) => {
-                        log::warn!(
-                            "[llm] SSE parse skip: {e}; payload preview: {}",
-                            safe_str_slice(payload, 80)
-                        );
+                        log::warn!("[llm] SSE parse skip: {e}");
                         continue;
                     }
                 };
@@ -944,16 +931,10 @@ impl OpenAICompatibleLLMProvider {
 
         let status = response.status();
         if !status.is_success() {
-            let body_text = response
-                .text()
-                .await
-                .map_err(|e| LLMError::Network(e.to_string()))?;
-            let preview_end = BODY_PREVIEW_LIMIT.min(body_text.len());
-            let preview = safe_str_slice(&body_text, preview_end);
-            log::error!("[llm] streaming HTTP {} body={}", status.as_u16(), preview);
+            log::error!("[llm] streaming HTTP {}", status.as_u16());
             return Err(LLMError::InvalidResponse {
                 status: status.as_u16(),
-                body: preview.to_string(),
+                body: "provider returned an error".to_string(),
             });
         }
 
@@ -996,10 +977,7 @@ impl OpenAICompatibleLLMProvider {
                 let v: Value = match serde_json::from_str(payload) {
                     Ok(v) => v,
                     Err(e) => {
-                        log::warn!(
-                            "[llm] polish SSE parse skip: {e}; payload preview: {}",
-                            safe_str_slice(payload, 80)
-                        );
+                        log::warn!("[llm] polish SSE parse skip: {e}");
                         continue;
                     }
                 };
@@ -1401,16 +1379,10 @@ impl CodexOAuthLLMProvider {
 
         let status = response.status();
         if !status.is_success() {
-            let body_text = response
-                .text()
-                .await
-                .map_err(|e| LLMError::Network(e.to_string()))?;
-            let preview_end = BODY_PREVIEW_LIMIT.min(body_text.len());
-            let preview = safe_str_slice(&body_text, preview_end);
-            log::error!("[llm] codex HTTP {} body={}", status.as_u16(), preview);
+            log::error!("[llm] codex HTTP {}", status.as_u16());
             return Err(LLMError::InvalidResponse {
                 status: status.as_u16(),
-                body: preview.to_string(),
+                body: "provider returned an error".to_string(),
             });
         }
 
@@ -1457,18 +1429,6 @@ impl CodexOAuthLLMProvider {
         }
         Ok(clean_polish_output(&full_text))
     }
-}
-
-/// Slice up to `end` bytes off `s`, but don't split a UTF-8 codepoint.
-pub(crate) fn safe_str_slice(s: &str, end: usize) -> &str {
-    if end >= s.len() {
-        return s;
-    }
-    let mut cut = end;
-    while cut > 0 && !s.is_char_boundary(cut) {
-        cut -= 1;
-    }
-    &s[..cut]
 }
 
 /// 构造对话感知 polish 的 chat completions 消息数组。
@@ -1681,10 +1641,7 @@ fn handle_codex_sse_event<F>(
         let v: Value = match serde_json::from_str(payload) {
             Ok(v) => v,
             Err(e) => {
-                log::warn!(
-                    "[llm] codex SSE parse skip: {e}; payload preview: {}",
-                    safe_str_slice(payload, 80)
-                );
+                log::warn!("[llm] codex SSE parse skip: {e}");
                 continue;
             }
         };
