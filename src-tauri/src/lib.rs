@@ -427,6 +427,11 @@ pub fn run() {
                     schedule_main_minimize_after_focus_loss(app);
                 }
                 if label == "main" {
+                    #[cfg(any(target_os = "windows", target_os = "macos"))]
+                    if matches!(event, tauri::WindowEvent::Focused(false)) {
+                        app.state::<Arc<coordinator::Coordinator>>()
+                            .clear_history_reinsert_target();
+                    }
                     if let tauri::WindowEvent::CloseRequested { ref api, .. } = event {
                         api.prevent_close();
                         hide_main_window(app);
@@ -1063,6 +1068,10 @@ pub fn log_dir_path() -> std::path::PathBuf {
 }
 
 pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    if let Some(coordinator) = app.try_state::<Arc<coordinator::Coordinator>>() {
+        coordinator.remember_history_reinsert_target();
+    }
     activate_window_mode(app);
     if let Some(w) = app.get_webview_window("main") {
         #[cfg(target_os = "windows")]

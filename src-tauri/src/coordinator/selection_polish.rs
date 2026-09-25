@@ -20,6 +20,10 @@ pub(super) struct SelectionPolishSession {
     preview_window: Option<usize>,
 }
 
+fn is_ready_for_confirmation(session: &SelectionPolishSession, request_id: &str) -> bool {
+    session.request_id == request_id && session.result.is_some()
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SelectionPolishPayload<'a> {
@@ -40,6 +44,22 @@ fn emit_state(inner: &Arc<Inner>, payload: SelectionPolishPayload<'_>) {
         let _ = window.set_focus();
     }
     let _ = app.emit_to("selection-polish", "selection-polish:state", payload);
+}
+
+fn emit_if_current(
+    inner: &Arc<Inner>,
+    request_id: &str,
+    payload: SelectionPolishPayload<'_>,
+) -> bool {
+    let state = inner.selection_polish_state.lock();
+    if !state
+        .as_ref()
+        .is_some_and(|session| session.request_id == request_id)
+    {
+        return false;
+    }
+    emit_state(inner, payload);
+    true
 }
 
 fn hide_window(inner: &Arc<Inner>) {
@@ -69,34 +89,51 @@ fn selection_polish_window_handle(_inner: &Arc<Inner>) -> Option<usize> {
 }
 
 pub(super) async fn begin(inner: &Arc<Inner>) -> Result<(), String> {
+    let request_id = Uuid::new_v4().to_string();
+    {
+        let mut active = inner.selection_polish_active_request.lock();
+        *active = Some(request_id.clone());
+        inner.selection_polish_state.lock().take();
+    }
     let capture = SelectionPolishWorkflow::new(&SystemSelectionAccess)
         .capture()
         .map_err(|error| {
-            emit_state(
-                inner,
-                SelectionPolishPayload {
-                    kind: "error",
-                    request_id: None,
-                    result: None,
-                    source_app: None,
-                    error_code: Some(error.code()),
-                    insert_status: None,
-                },
-            );
-            error.code().to_string()
+            if inner.selection_polish_active_request.lock().as_deref() == Some(request_id.as_str())
+            {
+                emit_state(
+                    inner,
+                    SelectionPolishPayload {
+                        kind: "error",
+                        request_id: None,
+                        result: None,
+                        source_app: None,
+                        error_code: Some(error.code()),
+                        insert_status: None,
+                    },
+                );
+                error.code().to_string()
+            } else {
+                "selectionPolishCancelled".to_string()
+            }
         })?;
 
-    let request_id = Uuid::new_v4().to_string();
     let source_app = capture.source_app.clone();
     let preview_window = selection_polish_window_handle(inner);
-    *inner.selection_polish_state.lock() = Some(SelectionPolishSession {
-        request_id: request_id.clone(),
-        capture,
-        result: None,
-        preview_window,
-    });
-    emit_state(
+    {
+        let active = inner.selection_polish_active_request.lock();
+        if active.as_deref() != Some(request_id.as_str()) {
+            return Err("selectionPolishCancelled".into());
+        }
+        *inner.selection_polish_state.lock() = Some(SelectionPolishSession {
+            request_id: request_id.clone(),
+            capture,
+            result: None,
+            preview_window,
+        });
+    }
+    emit_if_current(
         inner,
+        &request_id,
         SelectionPolishPayload {
             kind: "processing",
             request_id: Some(&request_id),
@@ -132,8 +169,9 @@ pub(super) async fn begin(inner: &Arc<Inner>) -> Result<(), String> {
     .map_err(|error| {
         let code = "selectionPolishProviderFailed";
         log::warn!("[selection-polish] provider failed: {error:#}");
-        emit_state(
+        if !emit_if_current(
             inner,
+            &request_id,
             SelectionPolishPayload {
                 kind: "error",
                 request_id: Some(&request_id),
@@ -142,7 +180,9 @@ pub(super) async fn begin(inner: &Arc<Inner>) -> Result<(), String> {
                 error_code: Some(code),
                 insert_status: None,
             },
-        );
+        ) {
+            return "selectionPolishCancelled".to_string();
+        }
         code.to_string()
     })?;
 
@@ -158,11 +198,12 @@ pub(super) async fn begin(inner: &Arc<Inner>) -> Result<(), String> {
     }
 
     if prefs.selection_polish_output_mode == SelectionPolishOutputMode::DirectReplace {
-        return replace(inner, result).map(|_| ());
+        return replace(inner, request_id, result).map(|_| ());
     }
 
-    emit_state(
+    emit_if_current(
         inner,
+        &request_id,
         SelectionPolishPayload {
             kind: "ready",
             request_id: Some(&request_id),
@@ -214,13 +255,18 @@ impl SelectionReplacementAccess for SystemReplacementAccess<'_> {
     }
 }
 
-pub(super) fn replace(inner: &Arc<Inner>, replacement: String) -> Result<InsertStatus, String> {
+pub(super) fn replace(
+    inner: &Arc<Inner>,
+    request_id: String,
+    replacement: String,
+) -> Result<InsertStatus, String> {
     let outcome = {
-        let state = inner.selection_polish_state.lock();
+        let mut state = inner.selection_polish_state.lock();
         let session = state
             .as_ref()
+            .filter(|session| is_ready_for_confirmation(session, &request_id))
             .ok_or_else(|| "selectionPolishPreviewUnavailable".to_string())?;
-        SelectionReplacementWorkflow::new(&SystemReplacementAccess {
+        let outcome = SelectionReplacementWorkflow::new(&SystemReplacementAccess {
             inner,
             preview_window: session.preview_window,
         })
@@ -228,32 +274,29 @@ pub(super) fn replace(inner: &Arc<Inner>, replacement: String) -> Result<InsertS
             &session.capture.target,
             &session.capture.full_text,
             &replacement,
-        )
+        );
+        if matches!(outcome, SelectionReplacementOutcome::Replaced(_)) {
+            state.take();
+            hide_window(inner);
+        }
+        outcome
     };
 
     match outcome {
-        SelectionReplacementOutcome::Replaced(status) => {
-            inner.selection_polish_state.lock().take();
-            hide_window(inner);
-            Ok(status)
-        }
+        SelectionReplacementOutcome::Replaced(status) => Ok(status),
         SelectionReplacementOutcome::Rejected(code) => {
-            let (request_id, source_app) = inner
+            let source_app = inner
                 .selection_polish_state
                 .lock()
                 .as_ref()
-                .map(|session| {
-                    (
-                        session.request_id.clone(),
-                        session.capture.source_app.clone(),
-                    )
-                })
-                .unwrap_or_default();
-            emit_state(
+                .filter(|session| session.request_id == request_id)
+                .and_then(|session| session.capture.source_app.clone());
+            emit_if_current(
                 inner,
+                &request_id,
                 SelectionPolishPayload {
                     kind: "error",
-                    request_id: (!request_id.is_empty()).then_some(request_id.as_str()),
+                    request_id: Some(&request_id),
                     result: Some(&replacement),
                     source_app: source_app.as_deref(),
                     error_code: Some(code),
@@ -273,6 +316,8 @@ pub(super) fn copy(inner: &Arc<Inner>, text: String) -> Result<(), String> {
 }
 
 pub(super) fn cancel(inner: &Arc<Inner>) {
+    let mut active = inner.selection_polish_active_request.lock();
+    active.take();
     inner.selection_polish_state.lock().take();
     hide_window(inner);
 }
@@ -280,6 +325,26 @@ pub(super) fn cancel(inner: &Arc<Inner>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn confirmation_requires_current_ready_request() {
+        let mut session = SelectionPolishSession {
+            request_id: "B".into(),
+            capture: SelectionPolishCapture {
+                target: Default::default(),
+                full_text: "B".into(),
+                model_text: "B".into(),
+                source_app: None,
+            },
+            result: None,
+            preview_window: None,
+        };
+        assert!(!is_ready_for_confirmation(&session, "A"));
+        assert!(!is_ready_for_confirmation(&session, "B"));
+        session.result = Some("B result".into());
+        assert!(is_ready_for_confirmation(&session, "B"));
+        assert!(!is_ready_for_confirmation(&session, "A"));
+    }
 
     #[test]
     fn frontend_payload_never_contains_the_original_selection_or_fingerprint() {

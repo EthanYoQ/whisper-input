@@ -38,6 +38,7 @@ pub(crate) enum SelectionPolishReadError {
     SecureInput,
     UnknownTarget,
     NoSelection,
+    SelectionTooLong,
 }
 
 impl SelectionPolishReadError {
@@ -47,6 +48,7 @@ impl SelectionPolishReadError {
             Self::SecureInput => "selectionPolishSecureInput",
             Self::UnknownTarget => "selectionPolishUnknownTarget",
             Self::NoSelection => "selectionPolishNoSelection",
+            Self::SelectionTooLong => "selectionPolishSelectionTooLong",
         }
     }
 }
@@ -130,7 +132,11 @@ impl<'a, A: SelectionAccess> SelectionPolishWorkflow<'a, A> {
             .read_full_selection()
             .filter(|text| !text.trim().is_empty())
             .ok_or(SelectionPolishReadError::NoSelection)?;
-        let model_text = truncate_selection(full_text.trim());
+        // Editing replaces the entire selection, so the model must see every character.
+        if full_text.chars().count() > SELECTION_MAX_CHARS {
+            return Err(SelectionPolishReadError::SelectionTooLong);
+        }
+        let model_text = full_text.clone();
         Ok(SelectionPolishCapture {
             target,
             full_text,
@@ -146,6 +152,8 @@ impl<'a, A: SelectionAccess> SelectionPolishWorkflow<'a, A> {
 pub(crate) struct SelectionInsertionTarget {
     #[cfg(target_os = "windows")]
     windows: Option<WindowsSelectionTarget>,
+    #[cfg(target_os = "macos")]
+    macos: Option<macos_ax::MacFocusedTarget>,
 }
 
 #[cfg(target_os = "windows")]
@@ -287,8 +295,16 @@ pub(crate) fn selection_insertion_target_may_reactivate(
 
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = (target, preview_window);
-        false
+        let _ = preview_window;
+        #[cfg(target_os = "macos")]
+        {
+            return target.macos.as_ref().is_some_and(macos_ax::may_reactivate);
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = target;
+            false
+        }
     }
 }
 
@@ -319,7 +335,14 @@ pub(crate) fn capture_selection_insertion_target() -> SelectionInsertionTarget {
         };
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        return SelectionInsertionTarget {
+            macos: macos_ax::capture_history_target(),
+        };
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     SelectionInsertionTarget::default()
 }
 
@@ -329,7 +352,71 @@ pub(crate) fn selection_insertion_target_is_captured(target: &SelectionInsertion
         target.windows.is_some()
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        target.macos.is_some()
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        let _ = target;
+        false
+    }
+}
+
+pub(crate) fn selection_insertion_target_is_external(target: &SelectionInsertionTarget) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        target
+            .windows
+            .as_ref()
+            .is_some_and(|captured| captured.foreground_process_id != std::process::id())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        target.macos.is_some()
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        let _ = target;
+        false
+    }
+}
+
+pub(crate) fn selection_insertion_target_accepts_text(target: &SelectionInsertionTarget) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::UI::Accessibility::{UIA_DocumentControlTypeId, UIA_EditControlTypeId};
+
+        target.windows.as_ref().is_some_and(|captured| {
+            let control_type = captured.focused_control.control_type;
+            control_type == UIA_EditControlTypeId.0 || control_type == UIA_DocumentControlTypeId.0
+        })
+    }
+    #[cfg(target_os = "macos")]
+    {
+        target.macos.is_some()
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        let _ = target;
+        false
+    }
+}
+
+pub(crate) fn selection_insertion_focus_matches(target: &SelectionInsertionTarget) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        target
+            .windows
+            .as_ref()
+            .is_some_and(|captured| Some(captured) == capture_windows_selection_target().as_ref())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        target.macos.as_ref().is_some_and(macos_ax::focus_matches)
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let _ = target;
         false
@@ -344,7 +431,16 @@ pub(crate) fn classify_selection_insertion_target(
         classify_windows_selection_target(target)
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        if selection_insertion_focus_matches(target) {
+            SelectionReadPermission::Allowed
+        } else {
+            SelectionReadPermission::Unknown
+        }
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let _ = target;
         SelectionReadPermission::Unknown
@@ -406,7 +502,12 @@ pub(crate) fn reactivate_selection_insertion_target(target: &SelectionInsertionT
         true
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        target.macos.as_ref().is_some_and(macos_ax::reactivate)
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let _ = target;
         false
@@ -762,6 +863,7 @@ mod linux_selection {
 mod macos_ax {
     use std::ffi::{c_void, CStr};
     use std::os::raw::c_char;
+    use std::sync::Arc;
 
     #[repr(C)]
     struct OpaqueAxRef(c_void);
@@ -776,6 +878,7 @@ mod macos_ax {
     #[link(name = "ApplicationServices", kind = "framework")]
     extern "C" {
         fn AXUIElementCreateSystemWide() -> AxUiElementRef;
+        fn AXUIElementGetPid(element: AxUiElementRef, pid: *mut i32) -> AxError;
         fn AXUIElementCopyAttributeValue(
             element: AxUiElementRef,
             attribute: CFStringRef,
@@ -786,6 +889,7 @@ mod macos_ax {
     #[link(name = "CoreFoundation", kind = "framework")]
     extern "C" {
         fn CFRelease(cf: CFTypeRef);
+        fn CFEqual(first: CFTypeRef, second: CFTypeRef) -> u8;
         fn CFStringCreateWithCString(
             allocator: CFAllocatorRef,
             cstr: *const c_char,
@@ -803,6 +907,146 @@ mod macos_ax {
     }
 
     const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
+
+    #[derive(Debug)]
+    struct RetainedElement(usize);
+
+    impl Drop for RetainedElement {
+        fn drop(&mut self) {
+            unsafe { CFRelease(self.0 as CFTypeRef) }
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub(super) struct MacFocusedTarget {
+        pid: i32,
+        element: Arc<RetainedElement>,
+    }
+
+    pub(super) fn capture_history_target() -> Option<MacFocusedTarget> {
+        let pid = frontmost_pid()?;
+        if pid == std::process::id() as i32 {
+            return None;
+        }
+        let element = focused_element()?;
+        if element_pid(&element) != Some(pid) || !element_accepts_text(&element) {
+            return None;
+        }
+        Some(MacFocusedTarget {
+            pid,
+            element: Arc::new(element),
+        })
+    }
+
+    pub(super) fn may_reactivate(target: &MacFocusedTarget) -> bool {
+        matches!(frontmost_pid(), Some(pid) if pid == target.pid || pid == std::process::id() as i32)
+    }
+
+    pub(super) fn reactivate(target: &MacFocusedTarget) -> bool {
+        use objc2::msg_send;
+        use objc2::runtime::{AnyClass, AnyObject, Bool};
+
+        if !may_reactivate(target) {
+            return false;
+        }
+        if frontmost_pid() == Some(target.pid) {
+            return true;
+        }
+        unsafe {
+            let Some(cls) = AnyClass::get("NSRunningApplication") else {
+                return false;
+            };
+            let app: *mut AnyObject =
+                msg_send![cls, runningApplicationWithProcessIdentifier: target.pid];
+            if app.is_null() {
+                return false;
+            }
+            let activated: Bool = msg_send![app, activateWithOptions: 0usize];
+            if !activated.as_bool() {
+                return false;
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(80));
+        frontmost_pid() == Some(target.pid)
+    }
+
+    pub(super) fn focus_matches(target: &MacFocusedTarget) -> bool {
+        if frontmost_pid() != Some(target.pid) {
+            return false;
+        }
+        let Some(current) = focused_element() else {
+            return false;
+        };
+        element_pid(&current) == Some(target.pid)
+            && element_accepts_text(&current)
+            && unsafe { CFEqual(target.element.0 as CFTypeRef, current.0 as CFTypeRef) != 0 }
+    }
+
+    fn frontmost_pid() -> Option<i32> {
+        use objc2::msg_send;
+        use objc2::runtime::{AnyClass, AnyObject};
+
+        unsafe {
+            let cls = AnyClass::get("NSWorkspace")?;
+            let workspace: *mut AnyObject = msg_send![cls, sharedWorkspace];
+            if workspace.is_null() {
+                return None;
+            }
+            let app: *mut AnyObject = msg_send![workspace, frontmostApplication];
+            if app.is_null() {
+                return None;
+            }
+            Some(msg_send![app, processIdentifier])
+        }
+    }
+
+    fn focused_element() -> Option<RetainedElement> {
+        unsafe {
+            let system = AXUIElementCreateSystemWide();
+            if system.is_null() {
+                return None;
+            }
+            let focused = copy_attribute(system, b"AXFocusedUIElement\0");
+            CFRelease(system as CFTypeRef);
+            focused.map(|element| RetainedElement(element as usize))
+        }
+    }
+
+    fn element_pid(element: &RetainedElement) -> Option<i32> {
+        let mut pid = 0;
+        (unsafe { AXUIElementGetPid(element.0 as AxUiElementRef, &mut pid) } == AX_ERROR_SUCCESS)
+            .then_some(pid)
+    }
+
+    fn element_accepts_text(element: &RetainedElement) -> bool {
+        unsafe {
+            let Some(role) = copy_attribute(element.0 as AxUiElementRef, b"AXRole\0") else {
+                return false;
+            };
+            let role_name = cfstring_to_rust(role);
+            CFRelease(role);
+            if !matches!(
+                role_name.as_deref(),
+                Some("AXTextField" | "AXTextArea" | "AXTextView" | "AXComboBox")
+            ) {
+                return false;
+            }
+            let subrole = copy_attribute(element.0 as AxUiElementRef, b"AXSubrole\0");
+            let subrole_name = subrole.and_then(cfstring_to_rust);
+            if let Some(subrole) = subrole {
+                CFRelease(subrole);
+            }
+            subrole_name.as_deref() != Some("AXSecureTextField")
+        }
+    }
+
+    unsafe fn copy_attribute(element: AxUiElementRef, name: &[u8]) -> Option<CFTypeRef> {
+        let attribute = cfstring_from_static(name)?;
+        let mut value: CFTypeRef = std::ptr::null();
+        let status = AXUIElementCopyAttributeValue(element, attribute, &mut value);
+        CFRelease(attribute);
+        (status == AX_ERROR_SUCCESS && !value.is_null()).then_some(value)
+    }
 
     /// 调 system-wide AX 树拿 focused element，再读它的 selected text。
     /// 失败（权限缺失 / 没焦点 / 该控件不支持选区属性）时返回 None。
@@ -1190,19 +1434,36 @@ mod tests {
     }
 
     #[test]
-    fn selection_polish_capture_keeps_the_full_fingerprint_but_limits_model_input() {
-        let full_text = format!("  {}  ", "a".repeat(SELECTION_MAX_CHARS + 10));
-        let access = FakeSelectionAccess {
-            permission: SelectionReadPermission::Allowed,
-            read_count: Cell::new(0),
-            text: Some(full_text.clone()),
-        };
-
-        let capture = SelectionPolishWorkflow::new(&access).capture().unwrap();
-
-        assert_eq!(capture.full_text, full_text);
-        assert!(capture.model_text.contains(SELECTION_TRUNCATED_MARKER));
-        assert_eq!(capture.source_app.as_deref(), Some("Editor"));
+    fn selection_polish_requires_complete_model_input() {
+        for (text, allowed) in [
+            ("a".repeat(4000), true),
+            ("a".repeat(4001), false),
+            ("中".repeat(4001), false),
+            ("🙂".repeat(4000), true),
+            (format!(" {} ", "a".repeat(3998)), true),
+            (format!(" {} ", "a".repeat(3999)), false),
+            (
+                format!("{}MIDDLE_SENTINEL{}", "H".repeat(2500), "T".repeat(2500)),
+                false,
+            ),
+        ] {
+            let access = FakeSelectionAccess {
+                permission: SelectionReadPermission::Allowed,
+                read_count: Cell::new(0),
+                text: Some(text.clone()),
+            };
+            let result = SelectionPolishWorkflow::new(&access).capture();
+            if allowed {
+                let capture = result.unwrap();
+                assert_eq!(capture.full_text, text);
+                assert_eq!(capture.model_text, text);
+            } else {
+                assert_eq!(
+                    result.unwrap_err(),
+                    SelectionPolishReadError::SelectionTooLong
+                );
+            }
+        }
     }
 
     #[test]
@@ -1345,6 +1606,18 @@ mod tests {
                 bounding_rectangle: (0, 0, 100, 20),
             },
         };
+
+        let insertion_target = SelectionInsertionTarget {
+            windows: Some(target.clone()),
+        };
+        assert!(selection_insertion_target_accepts_text(&insertion_target));
+        let mut non_text_target = target.clone();
+        non_text_target.focused_control.control_type = 50000;
+        assert!(!selection_insertion_target_accepts_text(
+            &SelectionInsertionTarget {
+                windows: Some(non_text_target),
+            }
+        ));
 
         assert_eq!(
             classify_windows_target_identity(&target, Some(41), Some(false)),

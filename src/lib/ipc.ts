@@ -580,10 +580,10 @@ export function cancelSelectionPolish(): Promise<void> {
   return invokeOrMock('cancel_selection_polish', undefined, () => undefined);
 }
 
-export function confirmSelectionPolish(replacement: string): Promise<InsertStatus> {
+export function confirmSelectionPolish(requestId: string, replacement: string): Promise<InsertStatus> {
   return invokeOrMock(
     'confirm_selection_polish',
-    { replacement },
+    { requestId, replacement },
     () => 'pasteSent' as InsertStatus,
   );
 }

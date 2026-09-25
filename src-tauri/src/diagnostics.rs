@@ -114,6 +114,11 @@ pub struct DiagnosticInsertion {
 }
 
 impl DiagnosticTrace {
+    fn strip_transcript_text(&mut self) {
+        self.asr.raw_text = None;
+        self.llm.final_text = None;
+    }
+
     pub fn compute_flags(&mut self) {
         let mut flags = Vec::new();
 
@@ -193,15 +198,14 @@ impl DiagnosticBundle {
 }
 
 fn redact_diagnostic_trace(mut trace: DiagnosticTrace) -> DiagnosticTrace {
+    trace.strip_transcript_text();
     redact_optional_secret_text(&mut trace.session.front_app);
     redact_optional_secret_text(&mut trace.recorder.device_name);
     redact_optional_secret_text(&mut trace.recorder.error);
     redact_optional_secret_text(&mut trace.asr.error);
     redact_optional_secret_text(&mut trace.asr.socket_error);
     redact_optional_secret_text(&mut trace.asr.server_log_id);
-    redact_optional_secret_text(&mut trace.asr.raw_text);
     redact_optional_secret_text(&mut trace.llm.error);
-    redact_optional_secret_text(&mut trace.llm.final_text);
     trace
 }
 
@@ -283,7 +287,9 @@ impl DiagnosticStore {
     pub fn new() -> Result<Self> {
         let dir = crate::persistence::app_data_dir()?;
         fs::create_dir_all(&dir).context("create diagnostics data dir failed")?;
-        Ok(Self::with_path(dir.join(DIAGNOSTIC_FILE)))
+        let store = Self::with_path(dir.join(DIAGNOSTIC_FILE));
+        store.scrub_transcript_text()?;
+        Ok(store)
     }
 
     pub fn with_path(path: PathBuf) -> Self {
@@ -301,11 +307,15 @@ impl DiagnosticStore {
 
     pub fn append_with_now(&self, mut trace: DiagnosticTrace, now: DateTime<Utc>) -> Result<()> {
         trace.compute_flags();
+        trace.strip_transcript_text();
         let _guard = self.inner.lock.lock();
         let DiagnosticRecords {
             mut traces,
             malformed_lines,
         } = self.read_records_locked()?;
+        for old_trace in &mut traces {
+            old_trace.strip_transcript_text();
+        }
         traces.insert(0, trace);
 
         let cutoff = now - Duration::days(DIAGNOSTIC_RETENTION_DAYS);
@@ -323,7 +333,24 @@ impl DiagnosticStore {
         let _guard = self.inner.lock.lock();
         let mut traces = self.read_records_locked()?.traces;
         traces.truncate(limit.min(traces.len()));
+        for trace in &mut traces {
+            trace.strip_transcript_text();
+        }
         Ok(traces)
+    }
+
+    /// Remove legacy transcript copies under the same lock used by append.
+    pub fn scrub_transcript_text(&self) -> Result<()> {
+        let _guard = self.inner.lock.lock();
+        if !self.inner.path.exists() {
+            return Ok(());
+        }
+        let mut records = self.read_records_locked()?;
+        for trace in &mut records.traces {
+            trace.strip_transcript_text();
+        }
+        // A malformed legacy line cannot be classified safely; do not retain it.
+        self.write_records_locked(&records.traces, &[])
     }
 
     fn read_records_locked(&self) -> Result<DiagnosticRecords> {
@@ -742,11 +769,35 @@ mod tests {
         assert_eq!(json["logExcerpt"], "log tail\n[REDACTED LINE]");
         assert_eq!(json["settingsSummary"]["apiKey"], "[REDACTED]");
         assert_eq!(json["diagnostics"][0]["asr"]["error"], "[REDACTED LINE]");
-        assert_eq!(
-            json["diagnostics"][0]["asr"]["rawText"],
-            "normal speech\n[REDACTED LINE]"
-        );
+        assert!(json["diagnostics"][0]["asr"]["rawText"].is_null());
         assert_eq!(json["history"][0]["rawTranscript"], "raw\n[REDACTED LINE]");
+    }
+
+    #[test]
+    fn diagnostic_store_never_persists_transcripts_and_scrubs_legacy_copies() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("diagnostics.jsonl");
+        let store = DiagnosticStore::with_path(path.clone());
+        let mut trace = sample_trace();
+        trace.asr.raw_text = Some("CONFIDENTIAL_REVIEW_MARKER_123".into());
+        trace.llm.final_text = Some("CONFIDENTIAL_REVIEW_MARKER_123".into());
+        store.append(trace).unwrap();
+        assert!(!fs::read_to_string(&path)
+            .unwrap()
+            .contains("CONFIDENTIAL_REVIEW_MARKER_123"));
+
+        let mut legacy = sample_trace();
+        legacy.asr.raw_text = Some("CONFIDENTIAL_REVIEW_MARKER_123".into());
+        fs::write(
+            &path,
+            format!("{}\n", serde_json::to_string(&legacy).unwrap()),
+        )
+        .unwrap();
+        store.scrub_transcript_text().unwrap();
+        assert!(!fs::read_to_string(&path)
+            .unwrap()
+            .contains("CONFIDENTIAL_REVIEW_MARKER_123"));
+        assert!(store.list_recent(1).unwrap()[0].asr.raw_text.is_none());
     }
 
     #[test]

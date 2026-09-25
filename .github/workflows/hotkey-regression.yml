@@ -37,3 +37,25 @@ jobs:
       - name: Run hotkey regression tests
         timeout-minutes: 12
         run: npm run check:hotkey-injection
+
+  application-regression:
+    name: Application regression (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, macos-15]
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+      - run: rustup update stable
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:frontend
+      - run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --lib -- --test-threads=1

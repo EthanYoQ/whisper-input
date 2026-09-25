@@ -12,6 +12,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "test:frontend": "node scripts/check-frontend-tests.mjs",
     "check:hotkey-injection": "node scripts/check-hotkey-injection.mjs"
   },
   "dependencies": {

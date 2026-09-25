@@ -1392,7 +1392,11 @@ pub fn delete_history_entry(coord: CoordinatorState<'_>, id: String) -> Result<(
 
 #[tauri::command]
 pub fn clear_history(coord: CoordinatorState<'_>) -> Result<(), String> {
-    coord.history().clear().map_err(|e| e.to_string())
+    coord.history().clear().map_err(|e| e.to_string())?;
+    coord
+        .diagnostics()
+        .scrub_transcript_text()
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1906,9 +1910,10 @@ pub fn cancel_selection_polish(coord: CoordinatorState<'_>) {
 #[tauri::command]
 pub fn confirm_selection_polish(
     coord: CoordinatorState<'_>,
+    request_id: String,
     replacement: String,
 ) -> Result<InsertStatus, String> {
-    coord.confirm_selection_polish(replacement)
+    coord.confirm_selection_polish(request_id, replacement)
 }
 
 #[tauri::command]
@@ -2640,10 +2645,14 @@ pub fn export_diagnostic_bundle(
     let diagnostics = diagnostics
         .list_recent(limit)
         .map_err(|e| format!("读取诊断记录失败：{e:#}"))?;
-    let mut history = coord
-        .history()
-        .list()
-        .map_err(|e| format!("读取历史记录失败：{e:#}"))?;
+    let mut history = if coord.prefs().get().history_enabled {
+        coord
+            .history()
+            .list()
+            .map_err(|e| format!("读取历史记录失败：{e:#}"))?
+    } else {
+        Vec::new()
+    };
     history.truncate(limit.min(history.len()));
     let settings_summary = diagnostic_settings_summary(&coord.prefs().get())
         .map_err(|e| format!("读取设置摘要失败：{e}"))?;

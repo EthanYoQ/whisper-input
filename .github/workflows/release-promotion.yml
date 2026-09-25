@@ -22,6 +22,10 @@ permissions:
   actions: read
   contents: write
 
+concurrency:
+  group: release-promotion
+  cancel-in-progress: false
+
 jobs:
   promote:
     name: Publish macOS and Windows assets together
@@ -157,10 +161,19 @@ jobs:
           EOF
           sed -i "s/__VERSION__/$version/g" release-notes.zh-CN.md
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            release_json="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,isPrerelease)"
+            test "$(jq -r '.isDraft' <<<"$release_json")" = "false"
+            test "$(jq -r '.isPrerelease' <<<"$release_json")" = "false"
+            expected="$(find release-assets -maxdepth 1 -type f -printf '%f\n' | sort)"
+            unexpected="$(comm -23 <(jq -r '.assets[].name' <<<"$release_json" | sort) <(printf '%s\n' "$expected"))"
+            if [ -n "$unexpected" ]; then
+              echo "Existing Release has unexpected assets: $unexpected" >&2
+              exit 1
+            fi
             : > promotion-evidence/missing-release-assets.txt
             while IFS= read -r asset; do
               local_digest="sha256:$(sha256sum "release-assets/$asset" | cut -d' ' -f1)"
-              existing_digest="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq ".assets[] | select(.name == \"$asset\") | .digest")"
+              existing_digest="$(jq -r --arg asset "$asset" '.assets[] | select(.name == $asset) | .digest' <<<"$release_json")"
               if [ -z "$existing_digest" ]; then
                 echo "$asset" >> promotion-evidence/missing-release-assets.txt
               elif [ "$existing_digest" = "$local_digest" ]; then
@@ -176,14 +189,26 @@ jobs:
             done < promotion-evidence/missing-release-assets.txt
             gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "Whisper Input $RELEASE_TAG" --notes-file release-notes.zh-CN.md
           else
-            gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --title "Whisper Input $RELEASE_TAG" --notes-file release-notes.zh-CN.md
+            gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --draft --title "Whisper Input $RELEASE_TAG" --notes-file release-notes.zh-CN.md
           fi
 
+          release_json="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,isPrerelease)"
+          test "$(jq -r '.isPrerelease' <<<"$release_json")" = "false"
+          actual="$(jq -r '.assets[].name' <<<"$release_json" | sort)"
+          expected="$(find release-assets -maxdepth 1 -type f -printf '%f\n' | sort)"
+          test "$actual" = "$expected"
+          while IFS= read -r asset; do
+            expected_digest="sha256:$(sha256sum "release-assets/$asset" | cut -d' ' -f1)"
+            actual_digest="$(jq -r --arg asset "$asset" '.assets[] | select(.name == $asset) | .digest' <<<"$release_json")"
+            test "$actual_digest" = "$expected_digest"
+          done < <(find release-assets -maxdepth 1 -type f -printf '%f\n' | sort)
+          if [ "$(jq -r '.isDraft' <<<"$release_json")" = "true" ]; then
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          fi
           release_json="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,isPrerelease)"
           test "$(jq -r '.isDraft' <<<"$release_json")" = "false"
           test "$(jq -r '.isPrerelease' <<<"$release_json")" = "false"
           actual="$(jq -r '.assets[].name' <<<"$release_json" | sort)"
-          expected="$(find release-assets -maxdepth 1 -type f -printf '%f\n' | sort)"
           test "$actual" = "$expected"
           while IFS= read -r asset; do
             expected_digest="sha256:$(sha256sum "release-assets/$asset" | cut -d' ' -f1)"
